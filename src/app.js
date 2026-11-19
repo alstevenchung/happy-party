@@ -2472,7 +2472,7 @@ function loop(now){
   if(NET.state()==='on'){
     const rn2=performance.now();
     if(rn2-netAcc>=50){netAcc=rn2;
-      NET.send({t:'st',x:pos.x,z:pos.z,f:face,m:moveAmt,r:curRoom,h:Math.round(F.hp),hm:F.max,c:F.clone?[+F.clone.x.toFixed(2),+F.clone.z.toFixed(2)]:0,el:F.elem?F.elem.type:0,e:emote?emote.type:(F.atk?F.atk.type:(F.charging||F.tc?'charge':null))});
+      NET.send({t:'st',x:pos.x,z:pos.z,f:face,m:moveAmt,r:curRoom,h:Math.round(F.hp),hm:F.max,c:F.clone?[+F.clone.x.toFixed(2),+F.clone.z.toFixed(2)]:0,el:F.elem?F.elem.type:0,b:(F.star>0?1:0)|(F.ult?2:0)|(F.torn?4:0),e:emote?emote.type:(F.atk?F.atk.type:(F.charging||F.tc?'charge':null))});
       if(isHo()&&F.on){
         const es={t:'es',w:F.wave,k:F.kills,s:F.score,en:[],sh:shots.map(s2=>[+s2.x.toFixed(2),+s2.z.toFixed(2),s2.hostile?1:0,s2.missile?1:0]),
           pk:packs.map(p2=>[+p2.x.toFixed(1),+p2.z.toFixed(1)]),ob:orbs.map(o2=>[+o2.x.toFixed(1),+o2.z.toFixed(1),o2.type]),
@@ -2700,6 +2700,7 @@ NET.on('onState',(s,msg)=>{
     if(F.on)stopFight();
     F.wave=1;F.upN=0;F.xp=0;F.xpNeed=4;F.sk={};F.bossN=0;F.bossWave=0;F.kills=0;F.score=0;F.gauge=0;F.hp=F.max;F.elem=null;clearStar();
     if(/skills5/.test(location.hash)){SK.forEach(s2=>F.sk[s2.id]=5);F.cloneCd=0.5;}
+    if(/star5/.test(location.hash))F.star=15;
     skillHud();hud();save();
     if(NET.state()==='on')NET.send({t:'sk',sk:F.sk});
     if(!NET.isHost())addRecent(NET.code());
@@ -2733,7 +2734,7 @@ NET.on('onData',d=>{
     RP.ping=Math.round(performance.now()-d.ts);
   }else if(d.t==='st'){
     RP.tx=d.x;RP.tz=d.z;RP.tface=d.f;RP.mv=d.m;RP.room=d.r;RP.hp=d.h;RP.hpm=d.hm||100;
-    RP.elem=d.el|0;
+    RP.elem=d.el|0;RP.fxb=d.b|0;
     if(d.c&&!RP.clone){RP.clone={x:d.c[0],z:d.c[1]};RP.cloneNew=true;}
     else if(!d.c&&RP.clone){RP.cloneGone={x:RP.clone.x,z:RP.clone.z};RP.clone=null;}
     else if(d.c){RP.clone.x=d.c[0];RP.clone.z=d.c[1];}
@@ -2759,7 +2760,8 @@ NET.on('onData',d=>{
     if(RP.ch)try{RP.ch.update(Object.assign({},DEFAULT_CFG,d.cfg),Object.assign(EMPTY_OUT(),d.outfit));}catch(e){}
   }
 });
-let rpSwords=[],rpCloneCh=null,rpElemGl=null,rpFxAcc=0;
+let rpSwords=[],rpCloneCh=null,rpElemGl=null,rpFxAcc=0,rpRain=false,rpFxA2=0;
+const _rpv=new THREE.Vector3();
 function updateRPFx(dt,t){
   const vis=RP.on&&RP.ch&&RP.ch.root.visible;
   if(RP.cloneNew){RP.cloneNew=false;if(!rpCloneCh){rpCloneCh=new Character();scene.add(rpCloneCh.root);}try{rpCloneCh.update(Object.assign({},DEFAULT_CFG,RP.cfg||{}),EMPTY_OUT());}catch(e){}ghostify(rpCloneCh.root);if(vis)cloneSmoke(RP.clone.x,RP.clone.z);}
@@ -2776,6 +2778,24 @@ function updateRPFx(dt,t){
   if(vis&&RP.emote==='charge'){
     rpFxAcc-=dt;
     if(rpFxAcc<=0){rpFxAcc=0.09;emit(RP.x+(Math.random()-0.5)*0.9,0.15,RP.z+(Math.random()-0.5)*0.9,0,2.6+Math.random()*1.5,0,0,'#ffd24a',0.5,0.3,-0.5,0.1);}
+  }
+  const vis2=RP.on&&RP.ch&&RP.ch.root.visible;
+  if(vis2&&(RP.fxb&1)){
+    rpRain=true;
+    RP.ch.root.traverse(o=>{if(o.isMesh&&!o.userData.ol&&o.material&&o.material.emissive){o.getWorldPosition(_rpv);const hue=(((_rpv.y*1.5-t*2.4)%1)+1)%1;o.material.emissive.setHSL(hue,1,0.45);}});
+    if(Math.random()<0.3)emit(RP.x+(Math.random()-0.5)*0.8,0.3+Math.random()*1.4,RP.z+(Math.random()-0.5)*0.8,0,1.2,0,0,['#ffd24a','#ff6a88','#6bb6f2','#6bd47a'][(Math.random()*4)|0],0.5,0.25,-0.4,0.1);
+  }else if(rpRain){
+    rpRain=false;
+    if(RP.ch)RP.ch.root.traverse(o=>{if(o.isMesh&&!o.userData.ol&&o.material&&o.material.emissive)o.material.emissive.setHex(0);});
+  }
+  if(vis2&&(RP.fxb&4)){
+    RP.ch.root.rotation.y=t*20;
+    RP.ch.root.position.y=0.75+Math.sin(t*8)*0.12;
+    rpFxA2-=dt;
+    if(rpFxA2<=0){rpFxA2=0.06;const an2=Math.random()*6.28;emit(RP.x+Math.cos(an2)*0.9,0.2+Math.random()*1.6,RP.z+Math.sin(an2)*0.9,-Math.sin(an2)*3,1.5,Math.cos(an2)*3,0,'#cfeaff',0.4,0.3,0,0.3);}
+  }
+  if(vis2&&(RP.fxb&2)){
+    if(Math.random()<0.4)emit(RP.x+(Math.random()-0.5)*1.2,0.2,RP.z+(Math.random()-0.5)*1.2,0,3+Math.random()*2,0,0,'#ffd24a',0.6,0.35,-0.5,0.1);
   }
   if(RP.pf&&RP.et>0.07){
     RP.pf=false;
@@ -2820,7 +2840,7 @@ function updateRP(dt,t){
     const rpSwim=RP.room===7&&RP.z<-1.85;
     RP.ch.root.position.set(RP.x,rpSwim?-0.5:0,RP.z);RP.ch.root.rotation.y=RP.face;
     if(RP.emote)RP.et+=dt;if(RP.et>4)RP.emote=null;
-    RP.ch.tick(dt,t,RP.mv||0,RP.emote,RP.et);
+    RP.ch.tick(dt,t,RP.mv||0,(RP.fxb&2)?'ult':RP.emote,(RP.fxb&2)?0.5:RP.et);
   }
   updateRPSwords(dt,t);
   updateRPFx(dt,t);
