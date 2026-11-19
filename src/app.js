@@ -1778,6 +1778,7 @@ function resolveHit(){window._rh=(window._rh||0)+1;
   if(hits){F.shake=Math.max(F.shake,A.big?0.3:0.12);F.gauge=Math.min(100,F.gauge+6*hits*(1+0.2*lv('charge')));F.chain+=hits;F.chainT=1.3;SND.hit(A.big,A.k);}
 }
 function hitEnemy(e,dmg,kb,dx,dz,big,k){
+  if(isCl()){cDmg(e,dmg,kb,dx,dz,big,k);return;}
   if(e.state==='freeze')dmg*=1.8;
   dmg=Math.round(dmg);
   e.hp-=dmg;hitFx(e.x,1.3*e.sc,e.z,big,dmg,F.elem?ELEMS[F.elem.type].hex:undefined);flashChar(e.ch.root,90);e.pop=1;lifeSteal(dmg,e);
@@ -2363,7 +2364,7 @@ function loop(now){
   if(NET.state()==='on'){
     netAcc+=dt;
     if(netAcc>=0.1){netAcc=0;
-      NET.send({t:'st',x:pos.x,z:pos.z,f:face,m:moveAmt,r:curRoom,e:emote?emote.type:(F.atk?F.atk.type:(F.charging||F.tc?'charge':null))});
+      NET.send({t:'st',x:pos.x,z:pos.z,f:face,m:moveAmt,r:curRoom,h:Math.round(F.hp),hm:F.max,e:emote?emote.type:(F.atk?F.atk.type:(F.charging||F.tc?'charge':null))});
       if(isHo()&&F.on){
         const es={t:'es',w:F.wave,k:F.kills,s:F.score,en:[],sh:shots.map(s2=>[+s2.x.toFixed(1),+s2.z.toFixed(1),s2.hostile?1:0,s2.missile?1:0]),
           pk:packs.map(p2=>[+p2.x.toFixed(1),+p2.z.toFixed(1)]),ob:orbs.map(o2=>[+o2.x.toFixed(1),+o2.z.toFixed(1),o2.type]),
@@ -2571,7 +2572,14 @@ function coLeave(){
 
 /* ---------- 連線同玩：遠端玩家 + UI ---------- */
 const RP={ch:null,on:false,name:'',x:0,z:0,tx:0,tz:0,face:0,tface:0,mv:0,room:2,emote:null,et:0};
-function rpEnsure(){if(!RP.ch){RP.ch=new Character();scene.add(RP.ch.root);RP.ch.root.visible=false;}}
+function rpEnsure(){
+  if(!RP.ch){
+    RP.ch=new Character();scene.add(RP.ch.root);RP.ch.root.visible=false;
+    RP.bar=makeBar();RP.bar.visible=false;
+    RP.ring=new THREE.Mesh(new THREE.RingGeometry(0.5,0.66,28),new THREE.MeshBasicMaterial({transparent:true,opacity:0.55,side:2,depthWrite:false,blending:THREE.AdditiveBlending}));
+    RP.ring.rotation.x=-PI/2;RP.ring.visible=false;scene.add(RP.ring);
+  }
+}
 function netSendHello(){NET.send({t:'hi',name:NET.isHost()?'房主':'夥伴',cfg,outfit});}
 function recentRooms(){try{return JSON.parse(localStorage.getItem('acdress_rooms'))||[];}catch(e){return[];}}
 function addRecent(c){try{let r=recentRooms().filter(x=>x!==c);r.unshift(c);r=r.slice(0,4);localStorage.setItem('acdress_rooms',JSON.stringify(r));}catch(e){}}
@@ -2602,7 +2610,7 @@ NET.on('onData',d=>{
     try{RP.ch.update(Object.assign({},DEFAULT_CFG,d.cfg),Object.assign(EMPTY_OUT(),d.outfit));}catch(e){}
     RP.tx=RP.x=pos.x+1.2;RP.tz=RP.z=pos.z;toast('👋 '+RP.name+' 來了！');
   }else if(d.t==='st'){
-    RP.tx=d.x;RP.tz=d.z;RP.tface=d.f;RP.mv=d.m;RP.room=d.r;
+    RP.tx=d.x;RP.tz=d.z;RP.tface=d.f;RP.mv=d.m;RP.room=d.r;RP.hp=d.h;RP.hpm=d.hm||100;
     if(d.e&&d.e!==RP.emote){RP.emote=d.e;RP.et=0;}
     if(!d.e)RP.emote=null;
   }else if(d.t==='es'){coApplyEs(d);
@@ -2624,12 +2632,24 @@ NET.on('onData',d=>{
   }
 });
 function updateRP(dt,t){
-  if(!RP.on||!RP.ch)return;
+  if(!RP.on||!RP.ch){if(RP.bar)RP.bar.visible=false;if(RP.ring)RP.ring.visible=false;return;}
   const k=Math.min(1,dt*10);
   RP.x+=(RP.tx-RP.x)*k;RP.z+=(RP.tz-RP.z)*k;
   let dd=RP.tface-RP.face;dd=Math.atan2(Math.sin(dd),Math.cos(dd));RP.face+=dd*k;
   const vis=mode==='room'&&RP.room===curRoom;
   RP.ch.root.visible=vis;
+  if(RP.bar){
+    RP.bar.visible=vis;RP.ring.visible=vis;
+    if(vis){
+      const r=Math.max(0,Math.min(1,(RP.hp===undefined?100:RP.hp)/(RP.hpm||100)));
+      RP.bar.position.set(RP.x,2.2,RP.z);RP.bar.quaternion.copy(camera.quaternion);RP.bar.scale.set(0.8,1,1);
+      const fg=RP.bar.userData.fg;fg.scale.x=Math.max(0.001,r);fg.position.x=-(1-r)*0.5;
+      fg.material.color.setHex(r>0.5?0x6bd47a:(r>0.25?0xf7c84a:0xe8505b));
+      RP.ring.position.set(RP.x,0.1,RP.z);
+      RP.ring.material.color.setHSL(0.33*r,0.9,0.55);
+      RP.ring.scale.setScalar(1+0.07*Math.sin(t*4));
+    }
+  }
   if(vis){
     RP.ch.root.position.set(RP.x,0,RP.z);RP.ch.root.rotation.y=RP.face;
     if(RP.emote)RP.et+=dt;if(RP.et>4)RP.emote=null;
@@ -2651,10 +2671,12 @@ function netUI(){
     body.appendChild(row);
     const rr=recentRooms();
     if(rr.length){
-      const lab=document.createElement('p');lab.innerHTML='<b>⏱ 最近的房間</b>（點一下直接加入）';body.appendChild(lab);
+      const lab=document.createElement('p');lab.innerHTML='<b>⏱ 最近的房間</b>（🟢=開房中，點了直接加入）';body.appendChild(lab);
       const row2=document.createElement('div');row2.className='nrow';
-      rr.forEach(c2=>row2.appendChild(mk(c2,'nrecent',()=>{SND.click();NET.join(c2);netUI();})));
+      const bts={};
+      rr.forEach(c2=>{const b3=mk('⏳'+c2,'nrecent',()=>{SND.click();NET.join(c2);netUI();});bts[c2]=b3;row2.appendChild(b3);});
       body.appendChild(row2);
+      NET.probe(rr,(cd,ok)=>{const b3=bts[cd];if(b3){b3.textContent=(ok?'🟢':'⚪')+cd;if(ok){b3.style.borderColor='#3fae6a';b3.style.boxShadow='0 0 10px rgba(63,174,106,.6)';}else b3.style.opacity=0.6;}});
     }
   }else if(s==='wait'||s==='joining'){
     const p=document.createElement('p');p.textContent=s==='wait'?'正在連上配對服務…':'正在連到房主…';body.appendChild(p);

@@ -6,7 +6,7 @@ const NET=(function(){
   const L={onState:null,onData:null};
   const CH='ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   function mkCode(){let c='';for(let i=0;i<5;i++)c+=CH[(Math.random()*CH.length)|0];return c;}
-  function setState(s,msg){state=s;if(L.onState)try{L.onState(s,msg||'');}catch(e){}}
+  function setState(s,msg){state=s;if(L.onState)try{L.onState(s,msg||'');}catch(e){if(/nettest/.test(location.hash))document.title='NETERR '+(e&&e.message);}}
   function newPeer(id){
     return new Peer(id,{debug:0,config:{iceServers:[{urls:'stun:stun.l.google.com:19302'},{urls:'stun:stun1.l.google.com:19302'}]}});
   }
@@ -46,7 +46,20 @@ const NET=(function(){
     setState('wait','正在連上配對服務…');
     peer=newPeer('hp2'+code);
     peer.on('open',()=>{setState('hosting');getMic();});
-    peer.on('connection',c=>{if(conn&&conn.open){c.close();return;}wireConn(c);});
+    peer.on('connection',c=>{
+      let role=null;
+      c.on('data',d=>{
+        if(role==='probe')return;
+        if(!role){
+          if(d&&d.t==='probe'){role='probe';try{c.send({t:'alive'});}catch(e){}setTimeout(()=>{try{c.close();}catch(e){}},400);return;}
+          if(conn&&conn.open){role='probe';try{c.close();}catch(e){}return;}
+          role='real';conn=c;setState('on');getMic();
+        }
+        if(role==='real'&&L.onData)try{L.onData(d);}catch(e){}
+      });
+      c.on('close',()=>{if(role==='real')cleanup('對方已離開連線');});
+      c.on('error',()=>{if(role==='real')cleanup('連線中斷');});
+    });
     peer.on('call',cl=>{cl.answer(micStream||undefined);wireCall(cl);});
     peer.on('error',e=>{
       if(e&&e.type==='unavailable-id')setState('off','房號撞號了，請再建一次');
@@ -89,12 +102,34 @@ const NET=(function(){
     if(micStream)micStream.getAudioTracks().forEach(t=>t.enabled=!muted);
     return muted;
   }
+  function probe(codes,cb){
+    if(state!=='off'||!codes||!codes.length||typeof Peer==='undefined')return;
+    let tp=null;
+    try{tp=newPeer(undefined);}catch(e){return;}
+    const done=new Set();
+    tp.on('open',()=>{
+      codes.forEach(cd=>{
+        try{
+          const c=tp.connect('hp2'+cd,{reliable:true});
+          c.on('open',()=>{try{c.send({t:'probe'});}catch(e){}});
+          c.on('data',d=>{if(d&&d.t==='alive'&&!done.has(cd)){done.add(cd);try{cb(cd,true);}catch(e){}}try{c.close();}catch(e){}});
+        }catch(e){}
+      });
+    });
+    tp.on('error',e=>{
+      if(e&&e.type==='peer-unavailable'){
+        const m=/hp2([A-Z0-9]+)/.exec(e.message||'');
+        if(m&&!done.has(m[1])){done.add(m[1]);try{cb(m[1],false);}catch(e2){}}
+      }
+    });
+    setTimeout(()=>{try{tp.destroy();}catch(e){}},9000);
+  }
   async function enableVoice(){
     await getMic();
     if(micStream&&peer&&conn&&conn.open){const cl=peer.call(conn.peer,micStream);wireCall(cl);}
     return micOk;
   }
-  return {host,join,send,leave:()=>cleanup('已離開連線'),toggleMute,enableVoice,
+  return {host,join,send,leave:()=>cleanup('已離開連線'),toggleMute,enableVoice,probe,
     state:()=>state,code:()=>code,isHost:()=>isHost,muted:()=>muted,micOk:()=>micOk,
     on:(k,f)=>{L[k]=f;}};
 })();
