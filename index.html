@@ -3422,6 +3422,7 @@ function koEnemy(e,dx,dz){
 function burst2(x,y,z){for(let i=0;i<16;i++)emit(x,y,z,(Math.random()-0.5)*7,Math.random()*4.5+1,(Math.random()-0.5)*7,0,['#ffe27a','#ffffff','#ff9ec0'][i%3],0.75,0.38,4);}
 function hurtPlayer(dmg,dx,dz,heavy){
   if(F.lvlPicks&&NET.state()==='on')return;
+  if(NET.state()==='on')NET.send({t:'hf'});
   if(F.star>0||F.inv>0||F.dead||F.ult&&F.ult.t<1.6)return;
   if(lv('speed')>=5&&Math.random()<0.15){
     F.inv=0.45;dmgNum(pos.x,2.5,pos.z,'閃避!','#9fe0ff');SND.whoosh(0);
@@ -5257,6 +5258,8 @@ NET.on('onData',d=>{
   }else if(d.t==='sk'){
     const old=RP.sk||{};RP.sk=d.sk||{};
     for(const k in RP.sk){if((old[k]|0)<RP.sk[k]){const s3=SK.find(s2=>s2.id===k);if(s3)toast('🤝 '+(RP.name||'夥伴')+'：'+s3.n+' Lv'+RP.sk[k]);}}
+  }else if(d.t==='hf'){
+    if(RP.ch){RP.emote='hurt';RP.et=0;try{flashChar(RP.ch.root,90);}catch(e2){}}
   }else if(d.t==='pz'){
     pzRemote=true;
     try{if(d.on){if(!F.manual)showPause();toast('⏸ 夥伴按了暫停');}else{if(F.manual)hidePause();}}catch(e2){}
