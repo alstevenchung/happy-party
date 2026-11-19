@@ -98,20 +98,19 @@ const walkable=(x,z)=>AREAS.some(a=>x>=a.x0&&x<=a.x1&&z>=a.z0&&z<=a.z1);
   const bx=new THREE.Box3();
   room.group.updateMatrixWorld(true);
   for(const ch of room.group.children){
-    let zi=-1,hasL=false;
+    let hasL=false;
     try{
       ch.traverse(o2=>{if(o2.isLight)hasL=true;});
       if(!hasL){
       bx.setFromObject(ch);
       if(isFinite(bx.min.x)){
         const w=bx.max.x-bx.min.x,cx=(bx.min.x+bx.max.x)/2;
-        if(w<30){zi=0;while(zi<7&&cx>DOORS[zi])zi++;}
+        ch.userData.zr=[bx.min.x,bx.max.x];
         const h2=bx.max.y-bx.min.y,dz2=bx.max.z-bx.min.z,r2=Math.hypot(w,h2,dz2)/2;
-        if(zi>=0&&r2<4.5&&h2>0.9)ch.userData.oc={x:cx,y:(bx.min.y+bx.max.y)/2,z:(bx.min.z+bx.max.z)/2,r:r2};
+        if(w<30&&r2<4.5&&h2>0.9)ch.userData.oc={x:cx,y:(bx.min.y+bx.max.y)/2,z:(bx.min.z+bx.max.z)/2,r:r2};
       }
       }
     }catch(e){}
-    ch.userData.zone=zi;
   }
   if(/zonedbg/.test(location.hash)){const h={};for(const ch of room.group.children){const z=ch.userData.zone;h[z]=(h[z]||0)+1;}document.title='ZB '+JSON.stringify(h)+' n='+room.group.children.length;}
 })();
@@ -146,11 +145,12 @@ let lastZV=-2;
 function applyZoneVis(){
   const cr=(mode==='room')?curRoom:-99;
   if(cr===lastZV)return;lastZV=cr;
+  const lo=(cr>0?DOORS[cr-1]:-1e9)-0.6,hi=(cr<7?DOORS[cr]:1e9)+0.6;
   let nv=0;
   for(const ch of room.group.children){
-    const z=ch.userData.zone;
-    if(z===undefined||z<0)continue;
-    ch.visible=(cr===-99)||z===cr;
+    const zr=ch.userData.zr;
+    if(!zr)continue;
+    ch.visible=(cr===-99)||(zr[1]>lo&&zr[0]<hi);
     if(ch.visible)nv++;
   }
   if(/zonedbg/.test(HASH))document.title='ZV cr='+cr+' mode='+mode+' vis='+nv;
