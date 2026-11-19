@@ -194,7 +194,8 @@ class Character{
     this.torsoSkin.geometry.dispose();this.torsoSkin.geometry=torsoBand(TY0,TY1,0);this.torsoSkin.children.forEach(ch=>{if(ch.userData.ol)ch.geometry=this.torsoSkin.geometry;});
     this.headPos.position.y=0.79*s+lift+0.5*syh-0.06;
   }
-  redrawFace(blink){drawFace(this.faceCv,this.cfg,blink);this.faceTex.needsUpdate=true;}
+  redrawFace(blink){drawFace(this.faceCv,this.cfg,blink,this.expr);this.faceTex.needsUpdate=true;}
+  setExpr(e){if(this.expr!==e){this.expr=e;if(this.cfg)this.redrawFace(this.blinking);}}
 
   /* ---------- 髮型 ---------- */
   buildHair(cover){
@@ -515,6 +516,7 @@ class Character{
   setPose(p){this.poseName=p||null;}
   setSleep(b){this.sleep=!!b;this.redrawFace(!!b);}
   tick(dt,t,mv,emote,et){
+    this.setExpr({punchR:'grit',punchL:'grit',upper:'shout',charge:'grit',windup:'grit',hurt:'hurt',dizzy:'hurt',fly:'shout',gaiaThrow:'shout',ult:'shout'}[emote]||null);
     const pn=this.poseName;if(pn)mv=0;
     if(this.hands)this.hands.forEach(h=>h.scale.set(1,1.1,0.88));
     this.phase+=dt*(11+7*(this.runK||0))*mv;

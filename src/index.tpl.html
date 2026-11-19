@@ -81,10 +81,10 @@ body.fight #fbtns{display:flex}
 #hcombo{height:34px;text-align:center;font-size:30px;font-weight:900;color:#ff7a3c;-webkit-text-stroke:2px #fff;opacity:0}
 #hcombo.show{opacity:1;animation:cpop .15s}
 @keyframes cpop{from{transform:scale(1.6)}to{transform:scale(1)}}
-#bossbar{position:fixed;left:50%;top:180px;transform:translateX(-50%);width:min(560px,72vw);display:none;z-index:6;pointer-events:none;text-align:center}
+#bossbar{position:fixed;left:50%;top:150px;transform:translateX(-50%);width:min(400px,52vw);display:none;z-index:6;pointer-events:none;text-align:center;opacity:.96}
 #bossbar.show{display:block}
-#bbname{font-weight:900;font-size:18px;color:#fff;-webkit-text-stroke:2px #5a1a30;text-shadow:0 3px 0 rgba(0,0,0,.3);margin-bottom:4px;letter-spacing:2px}
-.bbb{height:20px;border-radius:11px;background:rgba(30,20,40,.7);box-shadow:0 0 0 3px #fff;overflow:hidden}
+#bbname{font-weight:900;font-size:13px;color:#fff;text-shadow:0 0 4px rgba(90,26,48,.9),0 2px 0 rgba(0,0,0,.35);margin-bottom:2px;letter-spacing:1px}
+.bbb{height:11px;border-radius:7px;background:rgba(30,20,40,.65);box-shadow:0 0 0 2px #fff;overflow:hidden}
 .bbb i{display:block;height:100%;width:100%;background:linear-gradient(90deg,#ff3b5c,#ff9a3c);transition:width .15s}
 #mmap{position:fixed;left:12px;top:74px;width:280px;height:75px;display:none;z-index:6;pointer-events:none}
 body.fight #mmap{display:block}
@@ -167,8 +167,8 @@ body.fight #acts{display:none!important}
 body.fight #top .seg,body.fight #bWave,body.fight #bDance,body.fight #bSpin,body.fight #bRand,body.fight #bWard,body.fight #bRooms,body.fight #rmenu{display:none!important}
 body.fight #hud{top:14px}
 body.fight #mmap{top:12px}
-body.fight #bossbar{top:118px}
-@media (orientation:portrait){body.fight #mmap{top:122px}body.fight #bossbar{top:222px}}
+body.fight #bossbar{top:112px}
+@media (orientation:portrait){body.fight #mmap{top:122px}body.fight #bossbar{top:138px;width:min(360px,68vw)}}
 body.fight #toast{top:auto;bottom:140px}
 @media (orientation:portrait){#fbtns{bottom:calc(24px + 0px)}}
 #title{position:fixed;inset:0;z-index:30;display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:linear-gradient(160deg,#ffe3ec,#fff6d8 45%,#d8f3ff);overflow:hidden}
@@ -196,7 +196,18 @@ body.fight #toast{top:auto;bottom:140px}
 .pnew.warn b{color:#e8505b}
 .thint{color:#c17b92;font-weight:700;z-index:1;font-size:13px}
 body.fight #bUser{display:none!important}
-#joy{position:fixed;left:calc(26px + env(safe-area-inset-left,0px));bottom:calc(26px + env(safe-area-inset-bottom,0px));width:150px;height:150px;border-radius:50%;background:rgba(255,255,255,.4);border:4px solid rgba(255,255,255,.85);touch-action:none;z-index:3}
+@media (max-width:560px) and (orientation:portrait){
+  body.fight #hud{top:64px;width:74vw}
+  body.fight #bossbar{top:162px;width:min(330px,70vw)}
+  body.fight #mmap{top:192px}
+  body.fight #skills{top:252px;left:12px}
+  body.fight #killc{top:148px;right:10px}
+  body.fight #killc b{font-size:34px}
+  body.fight #hint{bottom:150px}
+  body.fight #toast{bottom:208px;font-size:12.5px}
+}
+#joy{position:fixed;left:calc(26px + env(safe-area-inset-left,0px));bottom:calc(26px + env(safe-area-inset-bottom,0px));width:150px;height:150px;border-radius:50%;background:rgba(255,255,255,.4);border:4px solid rgba(255,255,255,.85);touch-action:none;z-index:3;transition:opacity .2s}
+#joy.float{opacity:.96;box-shadow:0 0 0 6px rgba(255,255,255,.22);transition:none}
 #knob{position:absolute;left:35px;top:35px;width:72px;height:72px;border-radius:50%;background:rgba(244,143,177,.92);box-shadow:0 3px 0 rgba(0,0,0,.15);pointer-events:none}
 body[data-mode=create] #joy{display:none}
 #hint,#toast{position:fixed;left:50%;transform:translateX(-50%);background:rgba(90,66,68,.88);color:#fff;border-radius:20px;padding:10px 18px;font-size:15px;opacity:0;transition:opacity .3s;pointer-events:none;z-index:6;text-align:center;max-width:90vw}
@@ -250,8 +261,8 @@ body[data-mode=create] #joy{display:none}
   .pbox{padding:14px 12px}
   .plist{grid-template-columns:repeat(auto-fill,minmax(148px,1fr))}
   #hint{font-size:12.5px;padding:8px 13px}
-  #bossbar{width:72vw}
-  #bbname{font-size:15px}
+  #bossbar{width:64vw}
+  #bbname{font-size:12px}
   .tlogo{letter-spacing:4px}
   .pslot{width:150px}
   .pslot img{width:102px;height:102px}
@@ -269,23 +280,23 @@ body[data-mode=create] #joy{display:none}
   #bCharge{width:62px;height:62px;font-size:25px}
   #fbtns{gap:9px;bottom:calc(10px + env(safe-area-inset-bottom,0px));right:calc(14px + env(safe-area-inset-right,0px))}
   #fbtns small{font-size:10px}
-  #hud{top:52px;width:44vw}
+  #hud{top:44px;width:40vw}
   .hrow{margin-bottom:3px}
   .bar{height:12px}
   .bar.xp{height:7px}
   #hinfo{font-size:11.5px}
   #hinfo b{font-size:13px}
   #hcombo{height:24px;font-size:21px}
-  #mmap{top:52px;left:10px;width:168px;height:45px}
-  #skills{top:104px;left:10px;width:180px}
+  #mmap{top:44px;left:10px;width:168px;height:45px}
+  #skills{top:100px;left:10px;width:180px}
   .sk{font-size:14px;padding:0 5px}
   .sk small{font-size:10px}
-  #killc{top:52px;right:12px}
+  #killc{top:44px;right:12px}
   #killc b{font-size:38px;-webkit-text-stroke:2px #c8342f}
   #killc small{font-size:11px}
-  #bossbar{top:88px;width:44vw}
-  #bbname{font-size:13px;margin-bottom:2px}
-  .bbb{height:13px}
+  #bossbar{top:104px;width:34vw}
+  #bbname{font-size:10.5px;margin-bottom:1px}
+  .bbb{height:9px}
   #elembuff{bottom:104px;right:16px;font-size:15px;padding:3px 10px}
   #starbuff{bottom:140px;right:16px;font-size:15px;padding:3px 10px}
   #panel{top:52px;bottom:8px;right:8px;width:min(47vw,360px)}
@@ -316,8 +327,13 @@ body[data-mode=create] #joy{display:none}
   .pslot b{font-size:15px}
   .pnew{min-height:120px}
   .pnew span{font-size:36px}
-  #toast{font-size:12.5px}
+  #toast{font-size:12px}
+  body.fight #toast{bottom:64px}
+  body.fight #hint{bottom:8px}
 }
+/* 保險：確保戰鬥按鈕永遠貼右（曾在窄直向被未知規則擠出畫面） */
+#fbtns{left:auto !important;right:calc(24px + env(safe-area-inset-right,0px)) !important}
+@media (max-height:460px) and (orientation:landscape){#fbtns{right:calc(14px + env(safe-area-inset-right,0px)) !important}}
 </style>
 </head>
 <body data-mode="create">
@@ -363,7 +379,7 @@ body[data-mode=create] #joy{display:none}
   <div id="pbody"></div>
   <div id="foot"><button id="bDone">完成！去更衣間 ➜</button></div>
 </div>
-<div id="hint">左下搖桿移動　點地板走過去　拖曳旋轉・上下拖曳改視角　兩指縮放</div>
+<div id="hint">左半邊按住任意處＝搖桿　輕點地板走過去　右半邊拖曳轉視角　兩指縮放</div>
 <div id="toast"></div>
 <div id="title">
   <div class="tdeco"><i></i><i></i><i></i><i></i><i></i><i></i></div>

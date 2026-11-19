@@ -103,7 +103,7 @@ function drawMouth(g,sh,x,y,lip){
 }
 const FRECK=[[-.34,1.97],[-.44,2.03],[-.56,2.0],[-.4,2.11],[-.5,2.09],[-.62,2.07],[-.3,2.06],[-.46,1.94],[-.58,1.94],[-.36,2.16],[-.54,2.15],[-.66,2.0]];
 
-function drawFace(cv,cfg,blink){
+function drawFace(cv,cfg,blink,expr){
   const g=cv.getContext('2d');g.clearRect(0,0,FW,FH);
   const F=FACES[cfg.face],skin=SKIN[cfg.skin],fem=cfg.sex==='f';
   const L=eyeLayout(cfg),eT=L.th,eP=L.ph,fS=cfg.featS||1,dY=cfg.featY||0;
@@ -121,14 +121,19 @@ function drawFace(cv,cfg,blink){
     const n=cfg.freckle===1?5:12;
     [-1,1].forEach(s=>{for(let i=0;i<n;i++){const p=FRECK[i];g.beginPath();g.arc(fx(s*-p[0]),fy(p[1]+F.ey*0.5),3.6,0,7);g.fill();}});
   }
+  let bOv=null,mOv=null;
+  if(expr==='grit'){bOv='angry';mOv=6;}
+  else if(expr==='shout'){bOv='angry';mOv=2;}
+  else if(expr==='hurt'){bOv=5;mOv=7;blink=true;}
   const sc=(x,y,k,fn)=>{g.save();g.translate(x,y);g.scale(k,k);g.translate(-x,-y);fn();g.restore();};
   [-1,1].forEach(s=>{
     const ex=fx(s*eP),ey=fy(eT),k=EYE_SC[cfg.eye]*fS;
     sc(ex,ey,k,()=>drawEye(g,cfg.eye,ex,ey,s,EYECOL[cfg.eyeCol],blink,fem));
     const by=ey-95*fS;
-    sc(ex,by,1.25*fS,()=>drawBrow(g,cfg.brow,ex,by,s,browC));
+    if(bOv==='angry'){sc(ex,by,1.25*fS,()=>{g.strokeStyle=browC;g.lineCap='round';g.lineWidth=9;g.beginPath();g.moveTo(ex-s*36,by-12);g.lineTo(ex+s*18,by+8);g.stroke();});}
+    else sc(ex,by,1.25*fS,()=>drawBrow(g,bOv!==null?bOv:cfg.brow,ex,by,s,browC));
   });
   const ny=fy(1.9+F.ey*0.6+dY),my=fy(2.09+F.ey*0.6+dY);
   sc(FW/2,ny,1.35*fS,()=>drawNose(g,cfg.nose,FW/2,ny,tint(skin,'#e0703c',0.55)));
-  sc(FW/2,my,1.15*fS,()=>drawMouth(g,cfg.mouth,FW/2,my,LIPCOL[cfg.lipCol]));
+  sc(FW/2,my,1.15*fS,()=>drawMouth(g,mOv!==null?mOv:cfg.mouth,FW/2,my,LIPCOL[cfg.lipCol]));
 }

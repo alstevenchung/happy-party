@@ -311,6 +311,16 @@ function buildHouse(){
     for(let x=59;x<73.5;x+=1.6)sph(0.7,'#f3dca6',x,0.25,4.1,1.4,0.5,1);
   }
 
+  // 門口傳送光圈（兩側區塊共用顯示）
+  const doorRings=[];
+  [-18,-6,6,18,28,38,58].forEach(x=>{
+    const g=new THREE.Group();g.position.set(x,0.07,2.8);
+    const r1=new THREE.Mesh(new THREE.RingGeometry(0.55,0.72,28),new THREE.MeshBasicMaterial({color:0xffd98a,transparent:true,opacity:0.8,side:2,depthWrite:false,blending:THREE.AdditiveBlending}));
+    r1.rotation.x=-PI/2;g.add(r1);
+    const r2=new THREE.Mesh(new THREE.RingGeometry(0.28,0.38,22),new THREE.MeshBasicMaterial({color:0xfff2cc,transparent:true,opacity:0.55,side:2,depthWrite:false,blending:THREE.AdditiveBlending}));
+    r2.rotation.x=-PI/2;r2.position.y=0.012;g.add(r2);
+    G.add(g);doorRings.push(g);
+  });
   const ST=buildStreet(G,boxes);
   /* ---- 可走區域（含門洞） ---- */
   const zz=[-5.3,3.5];
@@ -430,6 +440,9 @@ function buildHouse(){
     }
     if(hotBall&&ballG){hotBall.x=ballG.position.x;hotBall.z=ballG.position.z;}
     ST.clouds.forEach(c=>{c.position.x+=dt*c.userData.v;if(c.position.x>c.userData.x1)c.position.x=c.userData.x0;});
+    doorRings.forEach((g,i)=>{const k=t*2.2+i*1.1;
+      g.children[0].scale.setScalar(1+0.15*Math.sin(k));g.children[0].material.opacity=0.5+0.3*Math.sin(k);
+      g.children[1].rotation.z=t*1.6+i;g.children[1].scale.setScalar(1+0.1*Math.sin(k+1.5));});
     duck.position.y+=(1.0+Math.sin(t*2)*0.03-duck.position.y)*Math.min(1,dt*6);duck.rotation.z=Math.sin(t*1.7)*0.1;
   }
 
