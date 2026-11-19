@@ -107,7 +107,7 @@ const walkable=(x,z)=>AREAS.some(a=>x>=a.x0&&x<=a.x1&&z>=a.z0&&z<=a.z1);
         const w=bx.max.x-bx.min.x,cx=(bx.min.x+bx.max.x)/2;
         ch.userData.zr=[bx.min.x,bx.max.x];
         const h2=bx.max.y-bx.min.y,dz2=bx.max.z-bx.min.z,r2=Math.hypot(w,h2,dz2)/2;
-        if(w<30&&r2<4.5&&h2>0.9)ch.userData.oc={x:cx,y:(bx.min.y+bx.max.y)/2,z:(bx.min.z+bx.max.z)/2,r:r2};
+        if(w<30&&r2<4.5&&h2>0.55)ch.userData.oc={x:cx,y:(bx.min.y+bx.max.y)/2,z:(bx.min.z+bx.max.z)/2,r:r2};
       }
       }
     }catch(e){}
@@ -145,7 +145,7 @@ let lastZV=-2;
 function applyZoneVis(){
   const cr=(mode==='room')?curRoom:-99;
   if(cr===lastZV)return;lastZV=cr;
-  const lo=(cr>0?DOORS[cr-1]:-1e9)-0.6,hi=(cr<7?DOORS[cr]:1e9)+0.6;
+  const lo=(cr>0?DOORS[cr-1]:-1e9)-0.3,hi=(cr<7?DOORS[cr]:1e9)+0.3;
   let nv=0;
   for(const ch of room.group.children){
     const zr=ch.userData.zr;
@@ -2390,7 +2390,7 @@ function loop(now){
     if(F.on&&(F.stun>0||F.charging||F.dead||F.tc||F.ult||F.torn||F.dizzy>0))dir.set(0,0,0);
     if(dir.lengthSq()>0.0025){
       moving=true;if(emote)emote=null;stepAcc+=dt;if(stepAcc>(F.on?0.17:0.28)){stepAcc=0;SND.step();if(F.on)emit(pos.x,0.12,pos.z,(Math.random()-0.5)*0.6,0.5,(Math.random()-0.5)*0.6,4,'#e8dcc8',0.45,0.24,0);}
-      const spd=(F.on?6.2*(1+0.1*lv('speed')):3.2)*(F.atk?0.4:1),before=pos.clone(),nx=pos.x+dir.x*spd*dt,nz=pos.z+dir.z*spd*dt;
+      const spd=(F.on?6.2*(1+0.1*lv('speed')):3.2)*(F.atk?0.4:1)*(swim?0.55:1),before=pos.clone(),nx=pos.x+dir.x*spd*dt,nz=pos.z+dir.z*spd*dt;
       if(walkable(nx,nz)){pos.x=nx;pos.z=nz;}else if(walkable(nx,pos.z))pos.x=nx;else if(walkable(pos.x,nz))pos.z=nz;
       collide(pos);
       if(target){stuck=pos.distanceTo(before)<3.2*dt*0.3?stuck+dt:0;}
@@ -2417,7 +2417,7 @@ function loop(now){
   if(F.on){if(F.atk){en=F.atk.type;et=F.atk.t;}else if(F.torn){en='fly';et=F.torn.t;}else if(F.dizzy>0){en='dizzy';et=F.dizzyT;}else if(F.ult){if(F.ult.phase===0){en='ult';et=F.ult.t;}else{en='gaiaThrow';et=F.ult.phase===1?F.ult.t:0.4;}}else if(F.charging||F.tc){en='charge';et=t;}else if(F.stun>0){en='hurt';et=0;}}
   moveAmt+=((moving?1:0)-moveAmt)*Math.min(1,dt*10);
   const rp=mode==='room'?pos:V(0,0,0);
-  me.root.position.copy(rp);me.root.position.y=actY+(F.dead?0.2:0)+(F.flyY||0);me.root.rotation.set(0,face,0);
+  me.root.position.copy(rp);me.root.position.y=actY+(F.dead?0.2:0)+(F.flyY||0)+(swim?-0.5+Math.sin(t*3.2)*0.05:0);me.root.rotation.set(0,face,0);
   if(F.torn)setTornQuat();
   me.runK=(me.runK||0)+(((F.on&&moving&&!F.dead)?1:0)-(me.runK||0))*Math.min(1,dt*10);
   me.tick(dt,t,moveAmt,en,et);
@@ -2428,6 +2428,7 @@ function loop(now){
   applyZoneVis();
   propOcclude(dt);
   coHudTick(dt);
+  seaTick(dt,t);
   if(NET.state()==='on'){
     netAcc+=dt;
     if(netAcc>=0.1){netAcc=0;
@@ -2723,7 +2724,8 @@ function updateRP(dt,t){
     }
   }
   if(vis){
-    RP.ch.root.position.set(RP.x,0,RP.z);RP.ch.root.rotation.y=RP.face;
+    const rpSwim=RP.room===7&&RP.z<-1.85;
+    RP.ch.root.position.set(RP.x,rpSwim?-0.5:0,RP.z);RP.ch.root.rotation.y=RP.face;
     if(RP.emote)RP.et+=dt;if(RP.et>4)RP.emote=null;
     RP.ch.tick(dt,t,RP.mv||0,RP.emote,RP.et);
   }
@@ -2758,6 +2760,95 @@ function coHudTick(dt){
     const pe=document.getElementById('coPing');
     if(RP.ping===undefined)pe.textContent='📶 …';
     else{pe.textContent='📶 '+RP.ping+'ms';pe.style.color=RP.ping<120?'#2f9e5b':(RP.ping<280?'#c08a00':'#d04545');}
+  }
+}
+/* ---------- 🌊 海泳模式：魚群+鯊魚 ---------- */
+let swim=false,swimKx=0,swimKz=0,swimFx=0,swimToastT=-99;
+const SEA={x0:58.9,x1:73.2,z0:-5.9,z1:-1.85};
+const seaG=new THREE.Group();scene.add(seaG);seaG.visible=false;
+const FISHES=[];let SHARK=null,swimRing=null;
+(function(){
+  const cols=['#7fc4e8','#f0a8c0','#9fd8a8','#ffd27f'];
+  for(let i=0;i<7;i++){
+    const g=new THREE.Group(),col=cols[i%4];
+    const body=new THREE.Mesh(new THREE.SphereGeometry(0.15,10,8),LAMB({color:col}));body.scale.set(1.7,0.75,0.6);g.add(body);
+    const tail=new THREE.Mesh(new THREE.ConeGeometry(0.09,0.2,4),LAMB({color:col}));tail.rotation.z=-PI/2;tail.position.x=-0.3;g.add(tail);
+    const fin=new THREE.Mesh(new THREE.ConeGeometry(0.06,0.14,4),LAMB({color:col}));fin.position.y=0.12;g.add(fin);
+    seaG.add(g);
+    FISHES.push({g,cx:60.8+Math.random()*9.5,cz:-4.7+Math.random()*1.1,r:0.7+Math.random()*1.0,a:Math.random()*6.28,sp:(0.5+Math.random()*0.6)*(i%2?1:-1),jt:3+Math.random()*8,jp:-1});
+  }
+  const sg=new THREE.Group();
+  const fin2=new THREE.Mesh(new THREE.ConeGeometry(0.22,0.62,4),LAMB({color:'#5a6b78'}));fin2.scale.z=0.35;fin2.position.y=0.26;sg.add(fin2);
+  const bk=new THREE.Mesh(new THREE.SphereGeometry(0.42,10,8),LAMB({color:'#6e8290'}));bk.scale.set(2.1,0.5,0.8);bk.position.y=-0.14;sg.add(bk);
+  const tl=new THREE.Mesh(new THREE.ConeGeometry(0.16,0.4,4),LAMB({color:'#5a6b78'}));tl.rotation.z=-PI/2;tl.position.set(-0.85,0.05,0);tl.scale.z=0.4;sg.add(tl);
+  seaG.add(sg);
+  SHARK={g:sg,x:71.5,z:-4.5,a:0,cd:0,chase:false};
+  swimRing=new THREE.Mesh(new THREE.RingGeometry(0.42,0.56,26),new THREE.MeshBasicMaterial({color:0xdff4ff,transparent:true,opacity:0.5,side:2,depthWrite:false,blending:THREE.AdditiveBlending}));
+  swimRing.rotation.x=-PI/2;swimRing.visible=false;scene.add(swimRing);
+})();
+function seaTick(dt,t){
+  const inBeach=mode==='room'&&curRoom===7;
+  seaG.visible=inBeach;
+  if(/swimtest/.test(HASH)&&!seaTick._t1){seaTick._t1=1;if(inBeach)pos.set(63.5,0,-4.0);}
+  const wasSwim=swim;
+  swim=inBeach&&pos.z<SEA.z1&&pos.x>SEA.x0-0.4;
+  swimRing.visible=swim;
+  if(swim&&!wasSwim){
+    SND.whoosh(0);
+    for(let i=0;i<14;i++)emit(pos.x+(Math.random()-0.5)*0.8,0.15,pos.z+(Math.random()-0.5)*0.8,(Math.random()-0.5)*2,2.5+Math.random()*1.5,(Math.random()-0.5)*2,7,'#cfeeff',0.4,0.5,0,4);
+    if(t-swimToastT>20){swimToastT=t;toast('🌊 游泳模式！小心深水區的鯊魚…');}
+  }
+  if(swim){
+    swimRing.position.set(pos.x,0.04,pos.z);
+    const sc=1+0.1*Math.sin(t*3.4);swimRing.scale.setScalar(sc);
+    swimFx-=dt;
+    if(swimFx<=0&&moveAmt>0.1){swimFx=0.13;emit(pos.x-Math.sin(face)*0.4,0.1,pos.z-Math.cos(face)*0.4,(Math.random()-0.5)*1.2,1.6,(Math.random()-0.5)*1.2,6,'#e4f6ff',0.35,0.45,0,4);}
+    if(swimKx||swimKz){
+      const nx=pos.x+swimKx*dt,nz=pos.z+swimKz*dt;
+      if(walkable(nx,nz)){pos.x=nx;pos.z=nz;}
+      swimKx*=Math.pow(0.02,dt);swimKz*=Math.pow(0.02,dt);
+      if(Math.hypot(swimKx,swimKz)<0.2){swimKx=0;swimKz=0;}
+    }
+  }
+  if(!inBeach)return;
+  for(const f of FISHES){
+    if(f.jp>=0){
+      f.jp+=dt/0.9;
+      if(f.jp>=1){f.jp=-1;f.jt=4+Math.random()*9;emit(f.g.position.x,0.1,f.g.position.z,0,1.5,0,5,'#dff4ff',0.3,0.4,0,4);}
+    }else{f.jt-=dt;if(f.jt<=0){f.jp=0;emit(f.g.position.x,0.1,f.g.position.z,0,1.8,0,5,'#dff4ff',0.3,0.4,0,4);SND.pop&&SND.pop();}}
+    f.a+=f.sp*dt;
+    const fx2=f.cx+Math.cos(f.a)*f.r,fz2=f.cz+Math.sin(f.a)*f.r*0.55;
+    const jy=f.jp>=0?Math.sin(f.jp*PI)*0.85:0;
+    f.g.position.set(fx2,-0.1+jy,fz2);
+    const fvx=-Math.sin(f.a)*f.sp,fvz=Math.cos(f.a)*0.55*f.sp;
+    f.g.rotation.y=-Math.atan2(fvz,fvx);
+    f.g.rotation.z=f.jp>=0?(0.5-f.jp)*1.5*(f.sp>0?1:-1):0;
+  }
+  if(SHARK){
+    SHARK.cd-=dt;
+    const dx=pos.x-SHARK.x,dz=pos.z-SHARK.z,d=Math.hypot(dx,dz);
+    SHARK.chase=swim&&d<4.2&&SHARK.cd<=0;
+    if(SHARK.chase){
+      SHARK.x+=dx/d*1.7*dt;SHARK.z+=dz/d*1.7*dt;
+      SHARK.g.rotation.y=-Math.atan2(dz,dx);
+      if(d<1.0){
+        SHARK.cd=3.5;
+        SND.slam();SND.whoosh(1);
+        for(let i=0;i<26;i++)emit(pos.x+(Math.random()-0.5),0.2,pos.z+(Math.random()-0.5),(Math.random()-0.5)*4,3+Math.random()*2.5,(Math.random()-0.5)*4,8,i%3?'#dff4ff':'#9fd8f0',0.5,0.6,0,5);
+        const kd=Math.hypot(dx,dz)||1;
+        swimKx=dx/kd*5;swimKz=4.5;
+        startEmote('dizzy',1.6);
+        toast('🦈 哇！被鯊魚撞到了！');
+      }
+    }else{
+      SHARK.a+=dt*0.35;
+      const tx2=66+Math.cos(SHARK.a)*5.5,tz2=-4.5+Math.sin(SHARK.a)*0.9;
+      const mx=tx2-SHARK.x,mz=tz2-SHARK.z,md=Math.hypot(mx,mz);
+      if(md>0.05){SHARK.x+=mx/md*Math.min(md,0.95*dt);SHARK.z+=mz/md*Math.min(md,0.95*dt);SHARK.g.rotation.y=-Math.atan2(mz,mx);}
+    }
+    SHARK.z=Math.max(-6.3,Math.min(-2.2,SHARK.z));
+    SHARK.x=Math.max(59.3,Math.min(73,SHARK.x));
+    SHARK.g.position.set(SHARK.x,-0.08+Math.sin(t*2.6)*0.03,SHARK.z);
   }
 }
 function netUI(){
