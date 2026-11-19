@@ -3270,7 +3270,8 @@ function spawnEnemy(forceType){
   const type=forceType||pickType(),T=TYPES[type];
   const L=enemyLook(type);slot.ch.update(L.c,L.o);slot.ch.setPose(null);
   const side=Math.random()<0.5?-1:1,a=AREAS[0];
-  const x=clamp(pos.x+side*(9+Math.random()*3),a.x0+1,a.x1-1),z=-3.6+Math.random()*9.6;
+  const refX=(curRoom===0&&!F.dead)?pos.x:((RP.on&&RP.room===0)?RP.x:(a.x0+a.x1)/2);
+  const x=clamp(refX+side*(9+Math.random()*3),a.x0+1,a.x1-1),z=-3.6+Math.random()*9.6;
   const w0=F.wave-1,elite=F.wave>=5&&type!=='healer'&&Math.random()<Math.min(0.06+F.wave*0.02,0.35),hpK=(1+0.12*w0)*(elite?2.2:1),dmgK=(1+0.06*w0)*(elite?1.4:1),E={slot,ch:slot.ch,type,T,elite,hp:Math.round(T.hp*hpK),max:Math.round(T.hp*hpK),cdK:Math.max(0.5,1-0.035*w0),x,z,face:0,state:'walk',t:0,cd:0.6+Math.random()*0.8,kx:0,kz:0,vy:0,y:0,emote:null,et:0,mv:0,bar:makeBar(),sc:T.sc*(elite?1.12:1),speed:(T.sp+Math.min(F.wave,20)*0.06)*(elite?1.1:1),dmg:Math.round(T.dmg*dmgK),col:elite?0xffd24a:T.col,ice:null,spin:0,fade:1,pop:0,tel:null,dirx:0,dirz:1,tgt:null,hitDone:false};
   slot.ch.root.scale.setScalar(E.sc);slot.ch.root.visible=true;scene.add(slot.ch.root);
   if(elite)slot.ch.root.traverse(o=>{if(o.isMesh&&o.material&&o.material.emissive&&!o.material.transparent)o.material.emissive.setHex(0x3a2a00);});
