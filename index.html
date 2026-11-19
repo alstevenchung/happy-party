@@ -4854,8 +4854,11 @@ function resize(){
 }
 addEventListener('resize',resize);resize();
 const CAMP={head:[1.38,3.1],hair:[1.38,3.7],body:[0.95,5.3]};
+let rafArmed=false,lastLoopT=0;
+function armLoop(){if(rafArmed)return;rafArmed=true;requestAnimationFrame(ts=>{rafArmed=false;loop(ts);});}
+setInterval(()=>{if(performance.now()-lastLoopT>700)loop(performance.now());},400);
 function loop(now){
-  requestAnimationFrame(loop);
+  armLoop();lastLoopT=performance.now();
   let dt=Math.min((now-last)/1000,0.05);last=now;if(F.pause||rotLock){dt=0;}else if(F.stop>0){F.stop-=dt;dt*=0.08;}else if(F.slow>0){F.slow-=dt;dt*=0.35;}t+=dt;
   let moving=false;
   if(mode==='room'&&act){updateAct(dt);}
