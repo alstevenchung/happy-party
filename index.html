@@ -5004,8 +5004,8 @@ function loop(now){
   coHudTick(dt);
   seaTick(dt,t);
   if(NET.state()==='on'){
-    netAcc+=dt;
-    if(netAcc>=0.05){netAcc=0;
+    const rn2=performance.now();
+    if(rn2-netAcc>=50){netAcc=rn2;
       NET.send({t:'st',x:pos.x,z:pos.z,f:face,m:moveAmt,r:curRoom,h:Math.round(F.hp),hm:F.max,c:F.clone?[+F.clone.x.toFixed(2),+F.clone.z.toFixed(2)]:0,el:F.elem?F.elem.type:0,e:emote?emote.type:(F.atk?F.atk.type:(F.charging||F.tc?'charge':null))});
       if(isHo()&&F.on){
         const es={t:'es',w:F.wave,k:F.kills,s:F.score,en:[],sh:shots.map(s2=>[+s2.x.toFixed(2),+s2.z.toFixed(2),s2.hostile?1:0,s2.missile?1:0]),
@@ -5331,6 +5331,8 @@ function updateRPSwords(dt,t){
 }
 function updateRP(dt,t){
   if(!RP.on||!RP.ch){if(RP.bar)RP.bar.visible=false;if(RP.ring)RP.ring.visible=false;return;}
+  const rn3=performance.now(),rdt=Math.min(0.1,(rn3-(updateRP._t||rn3))/1000);updateRP._t=rn3;
+  if(dt<=0)dt=rdt;
   const k=Math.min(1,dt*15);
   RP.x+=(RP.tx-RP.x)*k;RP.z+=(RP.tz-RP.z)*k;
   let dd=RP.tface-RP.face;dd=Math.atan2(Math.sin(dd),Math.cos(dd));RP.face+=dd*k;
