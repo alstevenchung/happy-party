@@ -5109,7 +5109,7 @@ function coApplyEs(d){
     const id=row[0];seen.add(id);
     let rec=CO.en.get(id);
     if(!rec){rec=coSpawnRec(id);if(!rec)continue;rec.x=rec.tx=row[1];rec.z=rec.tz=row[2];}
-    rec.tx=row[1];rec.tz=row[2];rec.tface=row[3];
+    rec.tx=row[1];rec.tz=row[2];rec.tface=row[3];bufPush(rec,row[1],row[2],row[3]);
     const hp=row[4];
     if(hp<rec.shownHp-0.5&&rec.state!=='ko'){dmgNum(rec.x,2.1*rec.sc,rec.z,Math.round(rec.shownHp-hp),'#fff6d8');}
     rec.shownHp=rec.hp=hp;
@@ -5166,7 +5166,7 @@ function coBossEs(bo){
   if(CO.boss&&bo){
     const B=CO.boss;
     if(bo[0]<B.hp)dmgNum(B.x,5.2,B.z,Math.round(B.hp-bo[0]),'#fff6d8');
-    B.hp=bo[0];B.max=bo[1];B.tx=bo[2];B.tz=bo[3];B.tface=bo[4];B.state=bo[5];B.n=bo[6];
+    B.hp=bo[0];B.max=bo[1];B.tx=bo[2];B.tz=bo[3];B.tface=bo[4];B.state=bo[5];B.n=bo[6];bufPush(B,bo[2],bo[3],bo[4]);
   }
   if(!bo&&CO.boss){
     const B=CO.boss;
@@ -5175,13 +5175,31 @@ function coBossEs(bo){
     scene.remove(B.g);CO.boss=null;
   }
 }
+function bufPush(o,x,z,f){const b=o._nb||(o._nb=[]);b.push({t:performance.now(),x,z,f});if(b.length>14)b.shift();}
+const _bs={x:0,z:0,f:0};
+function bufSample(o){
+  const b=o._nb;if(!b||!b.length)return false;
+  const rt=performance.now()-120;
+  if(rt<=b[0].t||b.length===1){const s=b[0];_bs.x=s.x;_bs.z=s.z;_bs.f=s.f;return true;}
+  for(let i=b.length-1;i>=0;i--){
+    if(b[i].t<=rt){
+      const A=b[i],B=b[i+1];
+      if(!B){_bs.x=A.x;_bs.z=A.z;_bs.f=A.f;return true;}
+      const k=(rt-A.t)/Math.max(1,B.t-A.t);
+      _bs.x=A.x+(B.x-A.x)*k;_bs.z=A.z+(B.z-A.z)*k;
+      let df=B.f-A.f;df=Math.atan2(Math.sin(df),Math.cos(df));_bs.f=A.f+df*k;
+      return true;
+    }
+  }
+  const s=b[b.length-1];_bs.x=s.x;_bs.z=s.z;_bs.f=s.f;return true;
+}
 function clientEnemiesInterp(dt,t2){
   for(const e of enemies){
-    const k=Math.min(1,dt*17);
-    e.x+=(e.tx-e.x)*k;e.z+=(e.tz-e.z)*k;e.y+=((e.ty||0)-e.y)*k;
-    let dd=e.tface-e.face;dd=Math.atan2(Math.sin(dd),Math.cos(dd));e.face+=dd*k;
-    const sp=Math.hypot(e.tx-e.x,e.tz-e.z);
-    e.mv+=((sp>0.08?1:0)-e.mv)*Math.min(1,dt*8);
+    const px0=e.x,pz0=e.z;
+    if(bufSample(e)){e.x=_bs.x;e.z=_bs.z;e.face=_bs.f;}
+    e.y+=((e.ty||0)-e.y)*Math.min(1,dt*17);
+    const sp2=dt>0?Math.hypot(e.x-px0,e.z-pz0)/dt:0;
+    e.mv+=((sp2>0.4?1:0)-e.mv)*Math.min(1,dt*10);
     if(e.state==='ko'){e.face+=e.spin*dt*(e.y>0.05?1:0.2);e.ch.setPose(e.y>0.05?'jump':'lie');e.emote=null;}
     else{
       e.ch.setPose(null);
@@ -5192,9 +5210,8 @@ function clientEnemiesInterp(dt,t2){
 }
 function clientBossTick(dt,t2){
   const B=CO.boss;if(!B)return;
-  const k=Math.min(1,dt*13);
-  B.x+=(B.tx-B.x)*k;B.z+=(B.tz-B.z)*k;
-  let dd=B.tface-B.face;dd=Math.atan2(Math.sin(dd),Math.cos(dd));B.face+=dd*k;
+  if(bufSample(B)){B.x=_bs.x;B.z=_bs.z;B.face=_bs.f;}
+  else{const k=Math.min(1,dt*13);B.x+=(B.tx-B.x)*k;B.z+=(B.tz-B.z)*k;let dd=B.tface-B.face;dd=Math.atan2(Math.sin(dd),Math.cos(dd));B.face+=dd*k;}
   const U=B.g.userData,moving=Math.hypot(B.tx-B.x,B.tz-B.z)>0.1;
   B.walk+=dt*(moving?6:0);
   const sw=Math.sin(B.walk)*0.5*(moving?1:0);
@@ -5284,7 +5301,7 @@ NET.on('onData',d=>{
   }else if(d.t==='pong'){
     RP.ping=Math.round(performance.now()-d.ts);
   }else if(d.t==='st'){
-    RP.tx=d.x;RP.tz=d.z;RP.tface=d.f;RP.mv=d.m;RP.room=d.r;RP.hp=d.h;RP.hpm=d.hm||100;
+    RP.tx=d.x;RP.tz=d.z;RP.tface=d.f;RP.mv=d.m;RP.room=d.r;RP.hp=d.h;RP.hpm=d.hm||100;bufPush(RP,d.x,d.z,d.f);
     RP.elem=d.el|0;RP.fxb=d.b|0;RP.pose=d.p||null;RP.ay=+d.ay||0;
     if(d.c&&!RP.clone){RP.clone={x:d.c[0],z:d.c[1]};RP.cloneNew=true;}
     else if(!d.c&&RP.clone){RP.cloneGone={x:RP.clone.x,z:RP.clone.z};RP.clone=null;}
@@ -5374,9 +5391,8 @@ function updateRP(dt,t){
   if(!RP.on||!RP.ch){if(RP.bar)RP.bar.visible=false;if(RP.ring)RP.ring.visible=false;return;}
   const rn3=performance.now(),rdt=Math.min(0.1,(rn3-(updateRP._t||rn3))/1000);updateRP._t=rn3;
   if(dt<=0)dt=rdt;
-  const k=Math.min(1,dt*15);
-  RP.x+=(RP.tx-RP.x)*k;RP.z+=(RP.tz-RP.z)*k;
-  let dd=RP.tface-RP.face;dd=Math.atan2(Math.sin(dd),Math.cos(dd));RP.face+=dd*k;
+  if(bufSample(RP)){RP.x=_bs.x;RP.z=_bs.z;RP.face=_bs.f;}
+  else{const k=Math.min(1,dt*15);RP.x+=(RP.tx-RP.x)*k;RP.z+=(RP.tz-RP.z)*k;let dd=RP.tface-RP.face;dd=Math.atan2(Math.sin(dd),Math.cos(dd));RP.face+=dd*k;}
   const vis=mode==='room'&&RP.room===curRoom;
   RP.ch.root.visible=vis;
   if(RP.bar){
