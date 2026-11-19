@@ -197,7 +197,8 @@ body.fight #toast{top:auto;bottom:140px}
 .pnew.warn b{color:#e8505b}
 .thint{color:#c17b92;font-weight:700;z-index:1;font-size:13px}
 body.fight #bUser{display:none!important}
-body.fight #bNet{display:none!important}
+#netbadge{position:fixed;top:calc(54px*var(--uis,1));left:50%;transform:translateX(-50%);z-index:7;background:#fff8ec;border:3px solid #ffd24a;border-radius:999px;padding:7px 16px;font-size:15px;font-weight:900;color:#5a4244;box-shadow:0 3px 0 rgba(0,0,0,.14);cursor:pointer;animation:nbPulse 1.1s infinite alternate;white-space:nowrap}
+@keyframes nbPulse{from{box-shadow:0 3px 0 rgba(0,0,0,.14),0 0 0 0 rgba(255,210,74,.55)}to{box-shadow:0 3px 0 rgba(0,0,0,.14),0 0 0 10px rgba(255,210,74,0)}}
 #coHud{position:fixed;right:calc(10px*var(--uis,1));top:40%;display:none;flex-direction:column;align-items:center;gap:3px;z-index:6;background:rgba(255,252,245,.82);border-radius:16px;padding:8px 10px;box-shadow:0 3px 0 rgba(0,0,0,.12);pointer-events:none}
 #coAva{width:52px;height:52px;border-radius:50%;border:3px solid #f4a6c0;background:#fff}
 #coName{font-size:12px;font-weight:800;color:#5a4244;max-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -411,6 +412,7 @@ body[data-mode=create] #joy{display:none}
 <div id="skills"></div>
 <div id="lvl"></div>
 <div id="pauseov"></div>
+<div id="netbadge" style="display:none"></div>
 <div id="coHud"><canvas id="coAva" width="64" height="64"></canvas><div id="coName"></div><div id="coHp"><i></i></div><div id="coPing"></div></div>
 <div id="netov"><div class="pbox nbox"><h2>🌐 連線同玩</h2><div id="netbody"></div><div class="pbtns"><button id="nClose">關閉視窗</button></div></div></div>
 <div id="killc"><small>擊殺數</small><b id="kcount">0</b></div>

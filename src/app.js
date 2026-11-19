@@ -2698,7 +2698,7 @@ function addRecent(c){try{let r=recentRooms().filter(x=>x!==c);r.unshift(c);r=r.
 let netWasOn=false;
 NET.on('onState',(s,msg)=>{
   const prevOn=netWasOn;netWasOn=(s==='on');
-  netUI();updVoiceBtn();updNetBtn();
+  netUI();updVoiceBtn();updNetBtn();updNetBadge();
   if(msg)toast(msg);
   if(s==='on'){
     if(F.on)stopFight();
@@ -2973,6 +2973,7 @@ function netUI(){
     body.appendChild(mk('❌ 取消','ngray',()=>{NET.leave();netUI();}));
   }else if(s==='hosting'){
     const c=document.createElement('div');c.className='ncode';c.textContent=NET.code();body.appendChild(c);
+    body.appendChild(mk('📋 複製房號','nblue',()=>{SND.click();copyCode();}));
     const p=document.createElement('p');p.innerHTML='把房號告訴朋友，等他加入…<br><small>第一次會詢問麥克風權限（語音用，可拒絕）</small>';body.appendChild(p);
     body.appendChild(mk('❌ 取消','nred',()=>{NET.leave();netUI();}));
   }else if(s==='on'){
@@ -2984,6 +2985,20 @@ function netUI(){
     body.appendChild(row);
   }
 }
+function copyCode(){
+  const c=NET.code();if(!c)return;
+  try{navigator.clipboard.writeText(c).then(()=>toast('📋 已複製房號 '+c),()=>toast('房號：'+c));}
+  catch(e){toast('房號：'+c);}
+}
+function updNetBadge(){
+  const b=$('#netbadge');if(!b)return;
+  const s=NET.state();
+  if(s==='hosting'){b.style.display='';b.textContent='🏠 房號 '+NET.code()+'　等待夥伴加入…　點我複製';}
+  else if(s==='wait'){b.style.display='';b.textContent='⏳ 正在連接配對服務…';}
+  else if(s==='joining'){b.style.display='';b.textContent='🚪 正在加入 '+NET.code()+'…';}
+  else b.style.display='none';
+}
+$('#netbadge').onclick=()=>{SND.click();copyCode();};
 function updVoiceBtn(){
   const b=$('#bVoice');if(!b)return;
   if(NET.state()!=='on'){b.style.display='none';return;}
@@ -3000,7 +3015,7 @@ $('#bVoice').onclick=()=>{
   else{NET.toggleMute();updVoiceBtn();toast(NET.muted()?'🔇 已靜音':'🎙 麥克風開啟');}
 };
 function openNet(){SND.resume();netUI();updVoiceBtn();updNetBtn();$('#netov').classList.add('show');}
-$('#bNet').onclick=()=>{if(!F.on){SND.click();openNet();}};
+$('#bNet').onclick=()=>{SND.click();openNet();};
 $('#nClose').onclick=()=>$('#netov').classList.remove('show');
 
 /* ---------- 啟動 ---------- */
