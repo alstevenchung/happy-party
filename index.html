@@ -5264,6 +5264,7 @@ NET.on('onState',(s,msg)=>{
     F.wave=1;F.upN=0;F.xp=0;F.xpNeed=4;F.sk={};F.bossN=0;F.bossWave=0;F.kills=0;F.score=0;F.gauge=0;F.hp=F.max;F.elem=null;clearStar();
     if(/skills5/.test(location.hash)){SK.forEach(s2=>F.sk[s2.id]=5);F.cloneCd=0.5;}
     if(/star5/.test(location.hash))F.star=15;
+    if(/elemfire/.test(location.hash))F.elem={type:'fire',t:600};
     skillHud();hud();save();
     if(NET.state()==='on')NET.send({t:'sk',sk:F.sk});
     if(!NET.isHost())addRecent(NET.code());
@@ -5309,7 +5310,7 @@ NET.on('onData',d=>{
     RP.ping=Math.round(performance.now()-d.ts);
   }else if(d.t==='st'){
     RP.tx=d.x;RP.tz=d.z;RP.tface=d.f;RP.mv=d.m;RP.room=d.r;RP.hp=d.h;RP.hpm=d.hm||100;bufPush(RP,d.x,d.z,d.f,d.ts);
-    RP.elem=d.el|0;RP.fxb=d.b|0;RP.pose=d.p||null;RP.ay=+d.ay||0;
+    RP.elem=d.el||0;RP.fxb=d.b|0;RP.pose=d.p||null;RP.ay=+d.ay||0;
     if(d.c&&!RP.clone){RP.clone={x:d.c[0],z:d.c[1]};RP.cloneNew=true;}
     else if(!d.c&&RP.clone){RP.cloneGone={x:RP.clone.x,z:RP.clone.z};RP.clone=null;}
     else if(d.c){RP.clone.x=d.c[0];RP.clone.z=d.c[1];}
@@ -5335,7 +5336,7 @@ NET.on('onData',d=>{
     if(RP.ch)try{RP.ch.update(Object.assign({},DEFAULT_CFG,d.cfg),Object.assign(EMPTY_OUT(),d.outfit));}catch(e){}
   }
 });
-let rpSwords=[],rpCloneCh=null,rpElemGl=null,rpFxAcc=0,rpRain=false,rpFxA2=0;
+let rpSwords=[],rpCloneCh=null,rpElemGl=null,rpElemR=null,rpFxAcc=0,rpRain=false,rpFxA2=0,rpChgA=0;
 const _rpv=new THREE.Vector3();
 function updateRPFx(dt,t){
   const vis=RP.on&&RP.ch&&RP.ch.root.visible;
@@ -5346,13 +5347,27 @@ function updateRPFx(dt,t){
     rpCloneCh.root.visible=cv;
     if(cv){rpCloneCh.root.position.set(RP.clone.x,0,RP.clone.z);rpCloneCh.tick(dt,t,0,null,0);}
   }
-  if(!rpElemGl){rpElemGl=addGlowSprite(0xffffff);rpElemGl.scale.set(1.5,1.5,1);rpElemGl.visible=false;scene.add(rpElemGl);}
-  const ev=vis&&RP.elem>0&&ELEMS[RP.elem];
-  rpElemGl.visible=!!ev;
-  if(ev){rpElemGl.material.color.setHex(ELEMS[RP.elem].col);rpElemGl.material.opacity=0.3+0.12*Math.sin(t*5);rpElemGl.position.set(RP.x+Math.sin(t*2.2)*0.3,1.15+Math.sin(t*3.1)*0.15,RP.z+Math.cos(t*2.2)*0.3);}
+  if(!rpElemGl){
+    rpElemGl=addGlowSprite(0xffffff);rpElemGl.scale.set(1.5,1.5,1);rpElemGl.visible=false;scene.add(rpElemGl);
+    rpElemR=new THREE.Mesh(new THREE.RingGeometry(0.72,0.92,32),new THREE.MeshBasicMaterial({transparent:true,opacity:0.45,side:2,depthWrite:false,blending:THREE.AdditiveBlending}));
+    rpElemR.rotation.x=-PI/2;rpElemR.visible=false;scene.add(rpElemR);
+  }
+  const ev=vis&&RP.elem&&ELEMS[RP.elem];
+  rpElemGl.visible=!!ev;rpElemR.visible=!!ev;
+  if(ev){
+    const EC=ELEMS[RP.elem];
+    rpElemGl.material.color.setHex(EC.col);rpElemGl.material.opacity=0.35+0.15*Math.sin(t*5);
+    rpElemGl.position.set(RP.x+Math.sin(t*2.2)*0.35,1.15+Math.sin(t*3.1)*0.15,RP.z+Math.cos(t*2.2)*0.35);
+    rpElemR.material.color.setHex(EC.col);
+    rpElemR.position.set(RP.x,0.06,RP.z);
+    rpElemR.scale.setScalar(1+0.08*Math.sin(t*4));
+    if(Math.random()<0.25)emit(RP.x+(Math.random()-0.5)*0.7,0.3+Math.random()*1.2,RP.z+(Math.random()-0.5)*0.7,0,1,0,0,EC.hex,0.45,0.22,-0.4,0.1);
+  }
   if(vis&&RP.emote==='charge'){
     rpFxAcc-=dt;
-    if(rpFxAcc<=0){rpFxAcc=0.09;emit(RP.x+(Math.random()-0.5)*0.9,0.15,RP.z+(Math.random()-0.5)*0.9,0,2.6+Math.random()*1.5,0,0,'#ffd24a',0.5,0.3,-0.5,0.1);}
+    if(rpFxAcc<=0){rpFxAcc=0.05;for(let i3=0;i3<3;i3++)emit(RP.x+(Math.random()-0.5)*1.0,0.15,RP.z+(Math.random()-0.5)*1.0,0,2.8+Math.random()*1.8,0,0,i3%2?'#ffd24a':'#fff2bb',0.55,0.32,-0.5,0.1);}
+    rpChgA-=dt;
+    if(rpChgA<=0){rpChgA=0.5;groundRing(RP.x,RP.z,0xffd24a,2.0,0.45,0.1);}
   }
   const vis2=RP.on&&RP.ch&&RP.ch.root.visible;
   if(vis2&&(RP.fxb&1)){
