@@ -1521,7 +1521,7 @@ let lvRound=0,lvCdInt=null,lvWait=false,myLvN=0;
 function lvResume(){lvWait=false;F.pause=false;$h('lvl').classList.remove('show');if(lvCdInt){clearInterval(lvCdInt);lvCdInt=null;}}
 function showLevelUp(){
   const pool=SK.filter(s=>lv(s.id)<5);
-  if(!pool.length){F.lvlQ=0;return;}
+  if(!pool.length){F.lvlQ=0;if(NET.state()==='on')NET.send({t:'lvp',n:9999});return;}
   const picks=[];while(picks.length<3&&pool.length)picks.push(pool.splice((Math.random()*pool.length)|0,1)[0]);
   F.pause=true;F.lvlQ--;F.charging=false;F.tc=null;F.hold=null;F.atk=null;F.buf=false;bP.classList.remove('tc');bP.style.setProperty('--p',0);
   const box=$h('lvl');box.innerHTML='<h2>⭐ 升級！選一個技能</h2><div class="cards"></div>';
