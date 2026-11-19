@@ -4303,9 +4303,11 @@ function pickSkill(id){
   if(NET.state()==='on'){
     NET.send({t:'sk',sk:F.sk});
     myLvN=lvRound;NET.send({t:'lvp',n:lvRound});
-    if(F.lvlQ<=0&&RP.on&&(RP.lvpN|0)<lvRound){
+    if(F.lvlQ<=0&&RP.on&&RP.room===0&&(RP.lvpN|0)<lvRound){
       lvWait=true;F.pause=true;
       const box2=$h('lvl');box2.innerHTML='<h2>⌛ 等待夥伴選擇技能…</h2>';box2.classList.add('show');
+      if(lvCdInt)clearInterval(lvCdInt);
+      lvCdInt=setTimeout(()=>{lvCdInt=null;if(lvWait)lvResume();},8000);
     }else if(F.lvlQ<=0&&lvCdInt){clearInterval(lvCdInt);lvCdInt=null;}
   }
   if(F.lvlQ>0)setTimeout(showLevelUp,300);
