@@ -3881,9 +3881,10 @@ function updateFight(dt,t){
         shatterEnemy(e);
       }
       continue;}
-    let ttx=px,ttz=pz;e.onClone=false;e.onRemote=false;
+    let ttx=px,ttz=pz;e.onClone=false;e.onRemote=false;e.onRClone=false;
     if(isHo()&&RP.on&&RP.room===0){const rdd=Math.hypot(RP.x-e.x,RP.z-e.z),pdd0=Math.hypot(px-e.x,pz-e.z);if(rdd<pdd0){ttx=RP.x;ttz=RP.z;e.onRemote=true;}}
     if(F.clone){const cdd=Math.hypot(F.clone.x-e.x,F.clone.z-e.z),tdd=Math.hypot(ttx-e.x,ttz-e.z);if(cdd<tdd+6){ttx=F.clone.x;ttz=F.clone.z;e.onClone=true;e.onRemote=false;}}
+    if(isHo()&&RP.on&&RP.clone){const cd2=Math.hypot(RP.clone.x-e.x,RP.clone.z-e.z),td2=Math.hypot(ttx-e.x,ttz-e.z);if(cd2<td2+6){ttx=RP.clone.x;ttz=RP.clone.z;e.onRClone=true;e.onClone=false;e.onRemote=false;}}
     const dx=ttx-e.x,dz=ttz-e.z,d=Math.hypot(dx,dz)||0.001,want=Math.atan2(dx,dz);let mv=0;
     const face2=(rate)=>{let dd=want-e.face;dd=Math.atan2(Math.sin(dd),Math.cos(dd));e.face+=dd*Math.min(1,dt*rate);};
     const step=(sx,sz,spd)=>{e.x+=sx*spd*dt;e.z+=sz*spd*dt;mv=1;};
@@ -4212,7 +4213,7 @@ function updateClone(dt,t){
   if(C.t<=0)killClone();
 }
 function cloneHurt(){const C=F.clone;if(!C)return;C.pop=1;emit(C.x,1.2,C.z,0,0,0,4,'#9fd0ff',0.25,0.4,0,3);for(let i=0;i<5;i++)emit(C.x,1.2,C.z,(Math.random()-0.5)*4,Math.random()*3,(Math.random()-0.5)*4,0,'#cfe8ff',0.4,0.22,3);}
-function dealHit(e,dmg,dx,dz,heavy){if(e.onClone)cloneHurt();else if(e.onRemote)NET.send({t:'phit',dmg,dx,dz,hv:heavy?1:0});else hurtPlayer(dmg,dx,dz,heavy);}
+function dealHit(e,dmg,dx,dz,heavy){if(e.onClone)cloneHurt();else if(e.onRClone)NET.send({t:'clh'});else if(e.onRemote)NET.send({t:'phit',dmg,dx,dz,hv:heavy?1:0});else hurtPlayer(dmg,dx,dz,heavy);}
 function clearSkillObjs(){
   swords.forEach(s=>scene.remove(s.g));swords=[];
   if(F.clone){F.clone.ch.root.visible=false;F.clone=null;}
@@ -4998,7 +4999,7 @@ function loop(now){
   if(NET.state()==='on'){
     netAcc+=dt;
     if(netAcc>=0.1){netAcc=0;
-      NET.send({t:'st',x:pos.x,z:pos.z,f:face,m:moveAmt,r:curRoom,h:Math.round(F.hp),hm:F.max,e:emote?emote.type:(F.atk?F.atk.type:(F.charging||F.tc?'charge':null))});
+      NET.send({t:'st',x:pos.x,z:pos.z,f:face,m:moveAmt,r:curRoom,h:Math.round(F.hp),hm:F.max,c:F.clone?[+F.clone.x.toFixed(2),+F.clone.z.toFixed(2)]:0,el:F.elem?F.elem.type:0,e:emote?emote.type:(F.atk?F.atk.type:(F.charging||F.tc?'charge':null))});
       if(isHo()&&F.on){
         const es={t:'es',w:F.wave,k:F.kills,s:F.score,en:[],sh:shots.map(s2=>[+s2.x.toFixed(1),+s2.z.toFixed(1),s2.hostile?1:0,s2.missile?1:0]),
           pk:packs.map(p2=>[+p2.x.toFixed(1),+p2.z.toFixed(1)]),ob:orbs.map(o2=>[+o2.x.toFixed(1),+o2.z.toFixed(1),o2.type]),
@@ -5255,7 +5256,11 @@ NET.on('onData',d=>{
     RP.ping=Math.round(performance.now()-d.ts);
   }else if(d.t==='st'){
     RP.tx=d.x;RP.tz=d.z;RP.tface=d.f;RP.mv=d.m;RP.room=d.r;RP.hp=d.h;RP.hpm=d.hm||100;
-    if(d.e&&d.e!==RP.emote){RP.emote=d.e;RP.et=0;}
+    RP.elem=d.el|0;
+    if(d.c&&!RP.clone){RP.clone={x:d.c[0],z:d.c[1]};RP.cloneNew=true;}
+    else if(!d.c&&RP.clone){RP.cloneGone={x:RP.clone.x,z:RP.clone.z};RP.clone=null;}
+    else if(d.c){RP.clone.x=d.c[0];RP.clone.z=d.c[1];}
+    if(d.e&&d.e!==RP.emote){RP.emote=d.e;RP.et=0;if(/^punch|^upper/.test(d.e))RP.pf=true;}
     if(!d.e)RP.emote=null;
   }else if(d.t==='es'){coApplyEs(d);
   }else if(d.t==='esp'){CO.look.set(d.id,d);
@@ -5264,6 +5269,7 @@ NET.on('onData',d=>{
     if(e&&e.state!=='ko'){const sv=F.elem;F.elem=d.el?{type:d.el,t:1}:null;CO.apply=true;hitEnemy(e,d.dmg,d.kb||4,d.dx||1,d.dz||0,!!d.big,(d.k===undefined||d.k===null)?undefined:d.k);CO.apply=false;F.elem=sv;}
   }else if(d.t==='bdmg'&&isHo()){
     const sv=F.elem;F.elem=d.el?{type:d.el,t:1}:null;CO.apply=true;hitBoss(d.dmg,!!d.big,d.dx||1,d.dz||0,d.k);CO.apply=false;F.elem=sv;
+  }else if(d.t==='clh'){cloneHurt();
   }else if(d.t==='phit'){hurtPlayer(d.dmg,d.dx||1,d.dz||0,!!d.hv);
   }else if(d.t==='pick'){
     if(d.k==='pack'){F.hp=Math.min(F.max,F.hp+35);burst('body',['#9bf0b0','#ffffff','#e8505b'],18);SND.heal();toast('❤ 補血 +35');dmgNum(pos.x,2.4,pos.z,'+35','#6bd47a');}
@@ -5276,7 +5282,30 @@ NET.on('onData',d=>{
     if(RP.ch)try{RP.ch.update(Object.assign({},DEFAULT_CFG,d.cfg),Object.assign(EMPTY_OUT(),d.outfit));}catch(e){}
   }
 });
-let rpSwords=[];
+let rpSwords=[],rpCloneCh=null,rpElemGl=null,rpFxAcc=0;
+function updateRPFx(dt,t){
+  const vis=RP.on&&RP.ch&&RP.ch.root.visible;
+  if(RP.cloneNew){RP.cloneNew=false;if(!rpCloneCh){rpCloneCh=new Character();scene.add(rpCloneCh.root);}try{rpCloneCh.update(Object.assign({},DEFAULT_CFG,RP.cfg||{}),EMPTY_OUT());}catch(e){}ghostify(rpCloneCh.root);if(vis)cloneSmoke(RP.clone.x,RP.clone.z);}
+  if(RP.cloneGone){if(vis)cloneSmoke(RP.cloneGone.x,RP.cloneGone.z);RP.cloneGone=null;}
+  if(rpCloneCh){
+    const cv=vis&&RP.clone&&RP.room===curRoom;
+    rpCloneCh.root.visible=cv;
+    if(cv){rpCloneCh.root.position.set(RP.clone.x,0,RP.clone.z);rpCloneCh.tick(dt,t,0,null,0);}
+  }
+  if(!rpElemGl){rpElemGl=addGlowSprite(0xffffff);rpElemGl.scale.set(1.5,1.5,1);rpElemGl.visible=false;scene.add(rpElemGl);}
+  const ev=vis&&RP.elem>0&&ELEMS[RP.elem];
+  rpElemGl.visible=!!ev;
+  if(ev){rpElemGl.material.color.setHex(ELEMS[RP.elem].col);rpElemGl.material.opacity=0.3+0.12*Math.sin(t*5);rpElemGl.position.set(RP.x+Math.sin(t*2.2)*0.3,1.15+Math.sin(t*3.1)*0.15,RP.z+Math.cos(t*2.2)*0.3);}
+  if(vis&&RP.emote==='charge'){
+    rpFxAcc-=dt;
+    if(rpFxAcc<=0){rpFxAcc=0.09;emit(RP.x+(Math.random()-0.5)*0.9,0.15,RP.z+(Math.random()-0.5)*0.9,0,2.6+Math.random()*1.5,0,0,'#ffd24a',0.5,0.3,-0.5,0.1);}
+  }
+  if(RP.pf&&RP.et>0.07){
+    RP.pf=false;
+    const SL2=(RP.sk&&RP.sk.shock)|0;
+    if(vis&&SL2)groundRing(RP.x,RP.z,0xffb060,2.2+0.6*SL2,0.3,0.14);
+  }
+}
 function updateRPSwords(dt,t){
   const Ls=(RP.on&&RP.sk&&RP.sk.swords)|0;
   const vis=RP.on&&RP.ch&&RP.ch.root.visible&&RP.room===0;
@@ -5315,6 +5344,7 @@ function updateRP(dt,t){
     RP.ch.tick(dt,t,RP.mv||0,RP.emote,RP.et);
   }
   updateRPSwords(dt,t);
+  updateRPFx(dt,t);
 }
 function drawAva(){
   const cv=document.getElementById('coAva');
