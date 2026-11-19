@@ -416,6 +416,10 @@ function collide(p){
       if(m===a)p.x=x0;else if(m===c)p.x=x1;else if(m===d)p.z=z0;else p.z=z1;
     }
   }
+  if(typeof RP!=='undefined'&&RP.on&&RP.room===curRoom){
+    const dx=p.x-RP.x,dz=p.z-RP.z,d2=Math.hypot(dx,dz);
+    if(d2<0.58&&d2>0.001){p.x=RP.x+dx/d2*0.58;p.z=RP.z+dz/d2*0.58;}
+  }
 }
 
 /* ---------- 家具互動 ---------- */
@@ -563,6 +567,14 @@ const isCl=()=>NET.state()==='on'&&!NET.isHost();
 const isHo=()=>NET.state()==='on'&&NET.isHost();
 function saveBest(){if(F.kills>F.best){F.best=F.kills;try{localStorage.setItem('acdress_best',F.best);}catch(_){}}}
 let enemies=[],packs=[],icefxs=[],shots=[];const epool=[];const tmpV=new THREE.Vector3(),_ov1=new THREE.Vector3(),_ov2=new THREE.Vector3();
+function occludesLine(ex,ey,ez,rad){
+  const cx=camera.position.x,cy=camera.position.y,cz=camera.position.z;
+  const vx=pos.x-cx,vy=1-cy,vz=pos.z-cz,len2=vx*vx+vy*vy+vz*vz||1;
+  let tq=((ex-cx)*vx+(ey-cy)*vy+(ez-cz)*vz)/len2;
+  if(tq<0.08||tq>0.92)return false;
+  const qx=cx+vx*tq-ex,qy=cy+vy*tq-ey,qz=cz+vz*tq-ez;
+  return qx*qx+qy*qy+qz*qz<rad*rad;
+}
 function fadeChar(root,fv){root.traverse(o=>{if(!o.isMesh)return;if(o.userData.ol){o.visible=fv>0.9;return;}const m=o.material;if(!m)return;if(m.userData.bOp===undefined){m.userData.bOp=m.opacity;m.userData.bTr=m.transparent;}if(fv>0.985){m.opacity=m.userData.bOp;m.transparent=m.userData.bTr;}else{m.transparent=true;m.opacity=m.userData.bOp*fv;}});}
 const $h=id=>document.getElementById(id);
 function banner(text,cls){const b=$h('banner');b.className='';b.textContent=text;void b.offsetWidth;b.className='show '+(cls||'');}
@@ -766,11 +778,12 @@ function resolveHit(){window._rh=(window._rh||0)+1;
       if(d<range){
         const dm=Math.round(A.dmg*(SL>=5?0.75:0.5)*pm);e.hp-=dm;dmgNum(e.x,2*e.sc,e.z,dm,'#d8b890');impact(e.x,0.4,e.z,6,'#d8c0a0');flashChar(e.ch.root,70);
         if(e.hp<=0)koEnemy(e,dx/d,dz/d);else if(e.state!=='freeze'){hideTel(e);e.state='hit';e.t=0.35;e.kx=dx/d*5;e.kz=dz/d*5;e.emote='hurt';e.et=0;}
-        hits++;
+        hits++;if(SL>=5)F.gauge=Math.min(100,F.gauge+2);
       }
     }
   }
-  if(hits){F.shake=Math.max(F.shake,A.big?0.3:0.12);F.gauge=Math.min(100,F.gauge+6*hits*(1+0.2*lv('charge')));F.chain+=hits;F.chainT=1.3;SND.hit(A.big||A.crit,A.k);}
+  if(hits){F.shake=Math.max(F.shake,A.big?0.3:0.12);F.gauge=Math.min(100,F.gauge+6*hits*(1+0.2*lv('charge')));F.chain+=hits;F.chainT=1.3;SND.hit(A.big||A.crit,A.k);
+    if(A.crit){F.zoomK=Math.max(F.zoomK,0.8);F.shake=Math.max(F.shake,0.45);dmgNum(pos.x+fx*1.4,2.3,pos.z+fz*1.4,'爆擊!','#ffd24a');groundRing(pos.x+fx*1.4,pos.z+fz*1.4,0xffd24a,3.2,0.4,0.15);}}
 }
 function cDmg(e,dmg,kb,dx,dz,big,k){
   hitFx(e.x,1.3*e.sc,e.z,big,Math.round(dmg),F.elem?ELEMS[F.elem.type].hex:undefined);
@@ -813,12 +826,18 @@ function hurtPlayer(dmg,dx,dz,heavy){
   if(F.star>0||F.inv>0||F.dead||F.ult&&F.ult.t<1.6)return;
   if(lv('speed')>=5&&Math.random()<0.15){
     F.inv=0.45;dmgNum(pos.x,2.5,pos.z,'閃避!','#9fe0ff');SND.whoosh(0);
+    {const nx=pos.x-dz*1.3,nz=pos.z+dx*1.3;if(walkable(nx,nz)){pos.x=nx;pos.z=nz;}}
     for(let i2=0;i2<6;i2++)emit(pos.x+(Math.random()-0.5),0.8,pos.z+(Math.random()-0.5),-dx*3,0.5,-dz*3,8,'#9fe0ff',0.4,0.4,0,0.5);
     return;
   }
   if(lv('defense')>=5&&Math.random()<0.25){
     F.inv=0.4;dmgNum(pos.x,2.5,pos.z,'格擋!','#ffd24a');SND.deflect();
-    burst('body',['#ffd24a','#ffffff'],12);groundRing(pos.x,pos.z,0xffd24a,2.2,0.35,0.12);
+    burst('body',['#ffd24a','#ffffff'],12);groundRing(pos.x,pos.z,0xffd24a,2.6,0.35,0.12);
+    for(const e2 of enemies){
+      if(e2.state==='ko'||e2.state==='freeze')continue;
+      const bx=e2.x-pos.x,bz=e2.z-pos.z,bd2=Math.hypot(bx,bz)||0.01;
+      if(bd2<2.1)hitEnemy(e2,8,5,bx/bd2,bz/bd2,false,undefined);
+    }
     return;
   }
   const raw=dmg;dmg=Math.max(1,Math.round(dmg*(1-0.1*lv('defense'))));
@@ -1234,9 +1253,8 @@ function updateFight(dt,t){
   updateSkills(dt,t);updateOrbs(dt,t);updateStar(dt,t);
   {const B=F.boss;
    if(B&&B.state!=='dead'){
-     _ov1.set(pos.x,1,pos.z).project(camera);_ov2.set(B.x,2.4,B.z).project(camera);
-     const occ=_ov2.z<_ov1.z-0.0004&&Math.hypot((_ov1.x-_ov2.x)*W/2,(_ov1.y-_ov2.y)*H/2)<180*UIS;
-     const tf2=occ?0.35:1;B.fadeA=(B.fadeA===undefined?1:B.fadeA)+(tf2-B.fadeA)*Math.min(1,dt*8);
+     const occ=occludesLine(B.x,2.4,B.z,2.3);
+     const tf2=occ?0.35:1;if(B.fadeA===undefined)B.fadeA=1;B.fadeA+=(tf2-B.fadeA)*Math.min(1,dt*14);
      if(B.fadeA<0.985||B.wasFaded){B.wasFaded=B.fadeA<0.985;fadeChar(B.g,B.fadeA);}
    }}
   // 敵人 AI
@@ -1382,9 +1400,8 @@ function updateFight(dt,t){
         }
       }
     }
-    {_ov1.set(pos.x,1,pos.z).project(camera);_ov2.set(e.x,1.1*e.sc,e.z).project(camera);
-     const occ=e.state!=='ko'&&_ov2.z<_ov1.z-0.0004&&Math.hypot((_ov1.x-_ov2.x)*W/2,(_ov1.y-_ov2.y)*H/2)<120*UIS;
-     const tf2=occ?0.32:1;e.fadeA=(e.fadeA===undefined?1:e.fadeA)+(tf2-e.fadeA)*Math.min(1,dt*8);
+    {const occ=e.state!=='ko'&&occludesLine(e.x,1.1*e.sc,e.z,1.15*e.sc);
+     const tf2=occ?0.32:1;if(e.fadeA===undefined)e.fadeA=1;e.fadeA+=(tf2-e.fadeA)*Math.min(1,dt*14);
      if(e.fadeA<0.985||e.wasFaded){e.wasFaded=e.fadeA<0.985;fadeChar(e.ch.root,e.fadeA);}}
     e.bar.visible=e.state!=='ko';e.bar.position.set(e.x,2.45*e.sc,e.z);e.bar.quaternion.copy(camera.quaternion);
     const r=Math.max(0,e.hp/e.max),fg=e.bar.userData.fg;fg.scale.x=Math.max(0.001,r);fg.position.x=-(1-r)*0.5;fg.material.color.set(r<0.3?0xe8505b:e.col);
@@ -1518,7 +1535,7 @@ function swordStrike(s){
   SND.hit(false,1);
 }
 function updateSwords(dt,t){
-  const L=lv('swords'),n=(F.on&&!F.dead&&L)?L+1:0;
+  const L=lv('swords'),n=(F.on&&!F.dead&&L)?(L+1+(L>=5?2:0)):0;
   while(swords.length<n)swords.push({g:makeSword(),state:'orbit',cd:0.4+Math.random()*0.6,tgt:null,x:pos.x,y:1.7,z:pos.z});
   while(swords.length>n)scene.remove(swords.pop().g);
   swords.forEach((s,i)=>{
@@ -1534,7 +1551,7 @@ function updateSwords(dt,t){
       const tg=s.tgt;
       if(!tg||(tg!==F.boss&&tg.state==='ko')||(tg===F.boss&&!F.boss)){s.state='orbit';s.cd=0.3;return;}
       const dx=tg.x-s.x,dy=1.2-s.y,dz=tg.z-s.z,d=Math.hypot(dx,dy,dz)||1,sp=24*dt;
-      if(d<=sp+0.7){swordStrike(s);s.state='orbit';s.cd=Math.max(0.5,1.4-0.1*L);}
+      if(d<=sp+0.7){swordStrike(s);s.state='orbit';s.cd=Math.max(L>=5?0.32:0.5,1.4-0.1*L);}
       else{s.x+=dx/d*sp;s.y+=dy/d*sp;s.z+=dz/d*sp;s.g.position.set(s.x,s.y,s.z);orient(s.g,V(dx,dy,dz));emit(s.x,s.y,s.z,0,0,0,0,'#bfe8ff',0.25,0.2,0,0.1);}
     }
   });
@@ -1567,12 +1584,12 @@ function updateClone(dt,t){
   if(lv('clone')>=5){
     C.atk=(C.atk||0)-dt;C.emT=(C.emT||0)-dt;
     if(C.atk<=0){
-      C.atk=0.8;
+      C.atk=0.6;
       let tg2=null,bd2=2.3;
       for(const e2 of enemies){if(e2.state==='ko')continue;const d2=Math.hypot(e2.x-C.x,e2.z-C.z);if(d2<bd2){bd2=d2;tg2=e2;}}
       if(tg2){C.emT=0.3;C.face=Math.atan2(tg2.x-C.x,tg2.z-C.z);
         const dx2=(tg2.x-C.x)/bd2||1,dz2=(tg2.z-C.z)/bd2||0;
-        hitEnemy(tg2,9,3,dx2,dz2,false,undefined);SND.whoosh(0);}
+        hitEnemy(tg2,14,3.5,dx2,dz2,false,undefined);SND.whoosh(0);}
     }
   }
   C.ch.tick(dt,t,C.mv,C.emT>0?'punchR':null,C.emT>0?0.3-C.emT:0);
@@ -1664,6 +1681,7 @@ function pickSkill(id){
   if(!F.pause||!F.lvlPicks)return;
   F.sk[id]=lv(id)+1;$h('lvl').classList.remove('show');F.pause=false;F.lvlPicks=null;
   SND.sparkle();levelFx();toast(SK.find(s=>s.id===id).n+'  Lv '+F.sk[id]);
+  if(F.sk[id]===5){banner('⭐ 大師解鎖 ⭐','fight');SND.starPower();burst('body',['#ffd24a','#fff6d8','#ffffff'],30);groundRing(pos.x,pos.z,0xffd24a,4.5,0.7,0.14);}
   if(id==='clone')F.cloneCd=Math.min(F.cloneCd,0.4);
   skillHud();hud();
   if(F.lvlQ>0)setTimeout(showLevelUp,300);
@@ -2555,10 +2573,25 @@ function coLeave(){
 const RP={ch:null,on:false,name:'',x:0,z:0,tx:0,tz:0,face:0,tface:0,mv:0,room:2,emote:null,et:0};
 function rpEnsure(){if(!RP.ch){RP.ch=new Character();scene.add(RP.ch.root);RP.ch.root.visible=false;}}
 function netSendHello(){NET.send({t:'hi',name:NET.isHost()?'房主':'夥伴',cfg,outfit});}
+function recentRooms(){try{return JSON.parse(localStorage.getItem('acdress_rooms'))||[];}catch(e){return[];}}
+function addRecent(c){try{let r=recentRooms().filter(x=>x!==c);r.unshift(c);r=r.slice(0,4);localStorage.setItem('acdress_rooms',JSON.stringify(r));}catch(e){}}
+let netWasOn=false;
 NET.on('onState',(s,msg)=>{
-  netUI();
+  const prevOn=netWasOn;netWasOn=(s==='on');
+  netUI();updVoiceBtn();updNetBtn();
   if(msg)toast(msg);
-  if(s==='on'){toast('🤝 連線成功！');SND.sparkle();netSendHello();}
+  if(s==='on'){
+    if(F.on)stopFight();
+    F.wave=1;F.upN=0;F.xp=0;F.xpNeed=4;F.sk={};F.bossN=0;F.bossWave=0;F.kills=0;F.score=0;F.gauge=0;F.hp=F.max;F.elem=null;clearStar();
+    skillHud();hud();save();
+    if(!NET.isHost())addRecent(NET.code());
+    toast('🤝 連線成功！共鬥從第 1 波全新開始');SND.sparkle();netSendHello();
+  }
+  if(s==='off'&&prevOn&&!NET.isHost()){
+    if(F.on)stopFight();
+    pos.set(0,0,1.6);target=null;wps=[];
+    toast('🏠 連線結束，已回到自己的家');
+  }
   if(s==='off'&&RP.on){RP.on=false;if(RP.ch)RP.ch.root.visible=false;coLeave();}
   if(/nettest/.test(location.hash))document.title='NET '+s+' '+NET.code();
 });
@@ -2616,6 +2649,13 @@ function netUI(){
     row.appendChild(inp);
     row.appendChild(mk('🚪 加入','nblue',()=>{SND.click();NET.join(inp.value);netUI();}));
     body.appendChild(row);
+    const rr=recentRooms();
+    if(rr.length){
+      const lab=document.createElement('p');lab.innerHTML='<b>⏱ 最近的房間</b>（點一下直接加入）';body.appendChild(lab);
+      const row2=document.createElement('div');row2.className='nrow';
+      rr.forEach(c2=>row2.appendChild(mk(c2,'nrecent',()=>{SND.click();NET.join(c2);netUI();})));
+      body.appendChild(row2);
+    }
   }else if(s==='wait'||s==='joining'){
     const p=document.createElement('p');p.textContent=s==='wait'?'正在連上配對服務…':'正在連到房主…';body.appendChild(p);
     body.appendChild(mk('❌ 取消','ngray',()=>{NET.leave();netUI();}));
@@ -2626,12 +2666,28 @@ function netUI(){
   }else if(s==='on'){
     const p=document.createElement('p');p.innerHTML='✅ 已連線'+(RP.on?('：<b>'+RP.name+'</b> 同行中'):'')+'<br>'+(NET.micOk()?'🔊 語音開啟中':'🎙 語音未啟用');body.appendChild(p);
     const row=document.createElement('div');row.className='nrow';
-    if(NET.micOk())row.appendChild(mk(NET.muted()?'🎙 開麥克風':'🔇 靜音','nblue',function(){const m=NET.toggleMute();this.textContent=m?'🎙 開麥克風':'🔇 靜音';}));
+    if(NET.micOk())row.appendChild(mk(NET.muted()?'🎙 取消靜音':'🔇 靜音','nblue',function(){const m=NET.toggleMute();this.textContent=m?'🎙 取消靜音':'🔇 靜音';updVoiceBtn();}));
+    else row.appendChild(mk('🎙 開啟語音','ngreen',function(){this.textContent='🎙 詢問權限中…';NET.enableVoice().then(ok=>{toast(ok?'🔊 語音已開啟！':'🎙 麥克風權限被拒，語音無法使用');netUI();updVoiceBtn();});}));
     row.appendChild(mk('❌ 離開連線','nred',()=>{NET.leave();netUI();}));
     body.appendChild(row);
   }
 }
-function openNet(){SND.resume();netUI();$('#netov').classList.add('show');}
+function updVoiceBtn(){
+  const b=$('#bVoice');if(!b)return;
+  if(NET.state()!=='on'){b.style.display='none';return;}
+  b.style.display='';b.textContent=NET.micOk()?(NET.muted()?'🔇':'🎙'):'🎙';b.style.opacity=NET.micOk()?1:0.5;
+}
+function updNetBtn(){
+  const b=$('#bNet');if(!b)return;const s=NET.state();
+  b.classList.toggle('hosting',s==='hosting'||s==='wait'||s==='joining');
+  b.classList.toggle('non',s==='on');
+}
+$('#bVoice').onclick=()=>{
+  SND.resume();
+  if(!NET.micOk())NET.enableVoice().then(ok=>{toast(ok?'🔊 語音已開啟！':'🎙 麥克風權限被拒');updVoiceBtn();netUI();});
+  else{NET.toggleMute();updVoiceBtn();toast(NET.muted()?'🔇 已靜音':'🎙 麥克風開啟');}
+};
+function openNet(){SND.resume();netUI();updVoiceBtn();updNetBtn();$('#netov').classList.add('show');}
 $('#bNet').onclick=()=>{if(!F.on){SND.click();openNet();}};
 $('#nClose').onclick=()=>$('#netov').classList.remove('show');
 
@@ -2659,7 +2715,8 @@ if(/fight/.test(HASH)){mode='room';pos.set(-30,0,0);camPos.set(pos.x,6,pos.z+9);
     if(/pause/.test(HASH)){showPause();}
     {const nm2=HASH.match(/net=(host|join):([A-Za-z0-9]+)/);
      if(nm2){setTimeout(()=>{if(nm2[1]==='host')NET.host(nm2[2]);else NET.join(nm2[2]);openNet();},600);}}
-    if(/occl/.test(HASH)){const e2=enemies[0];if(e2){e2.x=pos.x+0.3;e2.z=pos.z+2.3;e2.state='hit';e2.t=99;e2.kx=0;e2.kz=0;}}
+    if(/occl/.test(HASH)){const e2=enemies[0];if(e2){e2.x=pos.x+0.3;e2.z=pos.z+2.3;e2.state='hit';e2.t=99;e2.kx=0;e2.kz=0;if(/fadetest/.test(HASH))setInterval(()=>fadeChar(e2.ch.root,0.3),500);
+if(/probe/.test(HASH))setInterval(()=>{const o=occludesLine(e2.x,1.1*e2.sc,e2.z,1.15*e2.sc);groundRing(pos.x,pos.z,o?0x00ff00:0xff0000,2.5,0.5,0.2);dmgNum(pos.x,3,pos.z,(o?'OCC':'no')+' fA='+(e2.fadeA===undefined?'-':e2.fadeA.toFixed(2)),o?'#00ff88':'#ff6666');},700);}}
     if(/refl/.test(HASH)){setTimeout(()=>{enemies.forEach(e2=>{e2.x=pos.x-16;e2.z=3;});fireShot(pos.x+4,pos.z,-1,0,7.5,8,'ball');face=Math.PI/2;setTimeout(()=>punch(),300);
       setTimeout(()=>{document.title=document.title.replace('歡樂派對','')+' |REFL rh='+(window._rh|0)+' rf='+(window._rf|0)+' atk='+(!!F.atk)+' face='+face.toFixed(2)+' on='+F.on+' m='+mode+' px='+(pos.x|0)+' cr='+curRoom+' en='+enemies.length+' P='+F.pause+' lq='+F.lvlQ+' stop='+F.stop.toFixed(2)+' slow='+F.slow.toFixed(2)+' ov='+$h('lvl').className+' '+(shots[0]?(shots[0].hostile?'H':'F')+' d='+Math.hypot(shots[0].x-pos.x,shots[0].z-pos.z).toFixed(1):'gone');},750);},1500);}
     if(/uitest/.test(HASH)){setTimeout(()=>{const r1=bP.getBoundingClientRect(),r2=bC.getBoundingClientRect(),f=document.getElementById('fbtns'),rf=f.getBoundingClientRect();

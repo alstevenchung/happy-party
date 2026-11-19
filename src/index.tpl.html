@@ -212,6 +212,9 @@ body.fight #bNet{display:none!important}
 #netbody .nred{background:#e8737d}
 #netbody .ngray{background:#9aa0a6}
 #netbody .nstat{font-weight:800;color:#5a4244}
+#netbody .nrecent{background:#fff;color:#5a4244;border:3px solid #f4a6c0;letter-spacing:4px;font-size:19px}
+#bNet.hosting{background:#ffe9a8;animation:glow .5s infinite alternate}
+#bNet.non{background:#9bf0b0}
 @media (max-width:560px) and (orientation:portrait){
   body.fight #hud{top:64px;width:74vw}
   body.fight #bossbar{top:162px;width:min(330px,70vw)}
@@ -374,6 +377,7 @@ body[data-mode=create] #joy{display:none}
   <div class="seg"><button id="bCreate">👤 創角</button><button id="bRoom">🚪 更衣間</button></div>
   <button class="rb" id="bUser" title="主選單">🏡</button>
   <button class="rb" id="bNet" title="連線同玩">🌐</button>
+  <button class="rb" id="bVoice" style="display:none" title="語音">🎙</button>
   <div class="sp"></div>
   <button class="rb roomonly" id="bWave" title="揮手">👋</button>
   <button class="rb roomonly" id="bDance" title="跳舞">💃</button>

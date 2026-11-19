@@ -89,7 +89,12 @@ const NET=(function(){
     if(micStream)micStream.getAudioTracks().forEach(t=>t.enabled=!muted);
     return muted;
   }
-  return {host,join,send,leave:()=>cleanup('已離開連線'),toggleMute,
+  async function enableVoice(){
+    await getMic();
+    if(micStream&&peer&&conn&&conn.open){const cl=peer.call(conn.peer,micStream);wireCall(cl);}
+    return micOk;
+  }
+  return {host,join,send,leave:()=>cleanup('已離開連線'),toggleMute,enableVoice,
     state:()=>state,code:()=>code,isHost:()=>isHost,muted:()=>muted,micOk:()=>micOk,
     on:(k,f)=>{L[k]=f;}};
 })();
