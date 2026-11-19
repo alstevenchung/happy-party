@@ -142,10 +142,13 @@ function propOcclude(dt){
   }
 }
 let lastZV=-2;
+const ZCLIP=[new THREE.Plane(new THREE.Vector3(1,0,0),0),new THREE.Plane(new THREE.Vector3(-1,0,0),0)];
 function applyZoneVis(){
   const cr=(mode==='room')?curRoom:-99;
   if(cr===lastZV)return;lastZV=cr;
   const lo=(cr>0?DOORS[cr-1]:-1e9)-0.3,hi=(cr<7?DOORS[cr]:1e9)+0.3;
+  if(cr===-99){renderer.clippingPlanes=[];}
+  else{ZCLIP[0].constant=-(lo-0.9);ZCLIP[1].constant=hi+0.9;renderer.clippingPlanes=ZCLIP;}
   let nv=0;
   for(const ch of room.group.children){
     const zr=ch.userData.zr;
