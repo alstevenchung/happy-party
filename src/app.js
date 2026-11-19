@@ -94,6 +94,31 @@ function zoneBGColor(z){return z===0?'#9fd4ec':(z>=1&&z<=5?'#0d0b12':'#bfe3ef');
 function applyZone(z){zoneObjs.forEach(o=>{o.c.visible=o.zs.indexOf(z)>=0;});scene.background.set(zoneBGColor(z));}
 let wps=[],curRoom=-1,act=null,faceTo=null,actY=0,nearHot=null,nearNpc=null,actKey='';
 const walkable=(x,z)=>AREAS.some(a=>x>=a.x0&&x<=a.x1&&z>=a.z0&&z<=a.z1);
+(function(){
+  const bx=new THREE.Box3();
+  room.group.updateMatrixWorld(true);
+  for(const ch of room.group.children){
+    let zi=-1;
+    try{
+      bx.setFromObject(ch);
+      if(isFinite(bx.min.x)){
+        const w=bx.max.x-bx.min.x,cx=(bx.min.x+bx.max.x)/2;
+        if(w<30){zi=0;while(zi<7&&cx>DOORS[zi])zi++;}
+      }
+    }catch(e){}
+    ch.userData.zone=zi;
+  }
+})();
+let lastZV=-2;
+function applyZoneVis(){
+  const cr=(mode==='room')?curRoom:-99;
+  if(cr===lastZV)return;lastZV=cr;
+  for(const ch of room.group.children){
+    const z=ch.userData.zone;
+    if(z===undefined||z<0)continue;
+    ch.visible=(cr===-99)||Math.abs(z-cr)<=1;
+  }
+}
 function roomOf(x,z){for(let i=0;i<8;i++){const a=AREAS[i];if(x>=a.x0&&x<=a.x1&&z>=a.z0&&z<=a.z1)return i;}
   return x<-18?0:x<-6?1:x<6?2:x<18?3:x<28?4:x<38?5:x<58?6:7;}
 let camPitch=0.62,createPitch=0.08,popT=0,stepAcc=0;
@@ -2361,6 +2386,7 @@ function loop(now){
   updParts(dt);
   shadow.position.set(rp.x,0.02,rp.z);
   stage.tick(t);
+  applyZoneVis();
   if(NET.state()==='on'){
     netAcc+=dt;
     if(netAcc>=0.1){netAcc=0;
