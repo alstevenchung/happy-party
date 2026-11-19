@@ -107,20 +107,6 @@ function buildStreet(G,boxes){
   });
 
   /* ---- 街道傢俱 ---- */
-  [-22,-30,-37.5,-44.5,-52].forEach(x=>{
-    cyl(0.08,0.12,4.2,'#3a3f4a',x,2.1,3.0);cyl(0.2,0.2,0.2,'#3a3f4a',x,0.1,3.0);
-    const gl=sph(0.32,new THREE.MeshBasicMaterial({color:'#fff2b8'}),x,4.4,3.0);const arm=box(0.6,0.06,0.06,'#3a3f4a',x,4.1,3.0);
-    aabb(x-0.3,x+0.3,2.7,3.3);
-  });
-  [-26,-34,-42,-50,-56.5].forEach((x,i)=>{
-    box(1.2,0.5,1.2,'#b5865a',x,0.25,2.8);cyl(0.1,0.12,1.4,'#7a5238',x,1.2,2.8);
-    [[0,2.6,0,0.9],[0.5,2.3,0.2,0.65],[-0.5,2.25,-0.1,0.65],[0.1,2.2,0.5,0.6]].forEach(p=>sph(p[3],i%2?'#6dbb7a':'#7fcf8a',x+p[0],p[1],2.8+p[2]));
-    aabb(x-0.6,x+0.6,2.2,3.4);
-  });
-  [-28.5,-44].forEach(x=>{
-    box(2.0,0.1,0.6,'#c68a5a',x,0.55,2.0);box(2.0,0.6,0.1,'#c68a5a',x,0.9,2.3);[-0.8,0.8].forEach(d=>box(0.1,0.55,0.5,'#6b4a3a',x+d,0.28,2.0));
-    aabb(x-1.1,x+1.1,1.6,2.4);
-  });
   // 旗幟串
   for(let i=0;i<=60;i++){const t=i/60,x=-57+37*t,y=4.9-Math.sin(t*PI*6)*0.0-Math.abs(Math.sin(t*PI*5))*0.5;
     const f=new THREE.Mesh(new THREE.ConeGeometry(0.16,0.34,3),mm(['#f48fb1','#f7d44a','#6bb6f2','#9bd45a','#ffffff'][i%5]));f.position.set(x,y,-0.8);f.rotation.z=PI;G.add(f);}
