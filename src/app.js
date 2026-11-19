@@ -186,7 +186,7 @@ function applySet(set){
   for(const slot in set.p){const o=outfit[slot];burst(slot,[o.c1,o.c2||o.c1,'#ffffff','#ffe27a'],10);}
   SND.big();startEmote('spin',0.9);
 }
-function refresh(){me.update(cfg,shown());renderPanel();save();}
+function refresh(){me.update(cfg,shown());renderPanel();save();if(NET.state()==='on')NET.send({t:'out',cfg,outfit});}
 
 /* ---------- 面板繪製 ---------- */
 const bodyEl=$('#pbody');
@@ -2197,7 +2197,7 @@ function updateCat(dt,t){
 }
 
 /* ---------- 主迴圈 ---------- */
-let W=1,H=1,t=0,last=performance.now(),baseFov=40,rotLock=false,UIS=1,UIB=1;
+let W=1,H=1,t=0,last=performance.now(),baseFov=40,rotLock=false,UIS=1,UIB=1,netAcc=0;
 const camPos=new THREE.Vector3(0,5,8),camLook=new THREE.Vector3(),want=new THREE.Vector3(),wantL=new THREE.Vector3();
 const vo={x:0,y:0};
 function resize(){
@@ -2268,6 +2268,13 @@ function loop(now){
   updParts(dt);
   shadow.position.set(rp.x,0.02,rp.z);
   stage.tick(t);
+  if(NET.state()==='on'){
+    netAcc+=dt;
+    if(netAcc>=0.1){netAcc=0;
+      NET.send({t:'st',x:pos.x,z:pos.z,f:face,m:moveAmt,r:curRoom,e:emote?emote.type:(F.atk?F.atk.type:(F.charging||F.tc?'charge':null))});
+    }
+  }
+  updateRP(dt,t);
 
   // 相機
   const zoom=camZoom;
@@ -2335,6 +2342,77 @@ function closeTitle(m){titleOn=false;$('#title').classList.remove('show');flashF
 $('#bUser').onclick=()=>{if(!titleOn){SND.click();openTitle();}};
 addEventListener('pagehide',()=>save());
 
+
+/* ---------- 連線同玩：遠端玩家 + UI ---------- */
+const RP={ch:null,on:false,name:'',x:0,z:0,tx:0,tz:0,face:0,tface:0,mv:0,room:2,emote:null,et:0};
+function rpEnsure(){if(!RP.ch){RP.ch=new Character();scene.add(RP.ch.root);RP.ch.root.visible=false;}}
+function netSendHello(){NET.send({t:'hi',name:NET.isHost()?'房主':'夥伴',cfg,outfit});}
+NET.on('onState',(s,msg)=>{
+  netUI();
+  if(msg)toast(msg);
+  if(s==='on'){toast('🤝 連線成功！');SND.sparkle();netSendHello();}
+  if(s==='off'&&RP.on){RP.on=false;if(RP.ch)RP.ch.root.visible=false;}
+  if(/nettest/.test(location.hash))document.title='NET '+s+' '+NET.code();
+});
+NET.on('onData',d=>{
+  if(!d||!d.t)return;
+  if(d.t==='hi'){
+    rpEnsure();RP.on=true;RP.name=(''+(d.name||'夥伴')).slice(0,12);
+    try{RP.ch.update(Object.assign({},DEFAULT_CFG,d.cfg),Object.assign(EMPTY_OUT(),d.outfit));}catch(e){}
+    RP.tx=RP.x=pos.x+1.2;RP.tz=RP.z=pos.z;toast('👋 '+RP.name+' 來了！');
+  }else if(d.t==='st'){
+    RP.tx=d.x;RP.tz=d.z;RP.tface=d.f;RP.mv=d.m;RP.room=d.r;
+    if(d.e&&d.e!==RP.emote){RP.emote=d.e;RP.et=0;}
+    if(!d.e)RP.emote=null;
+  }else if(d.t==='out'){
+    if(RP.ch)try{RP.ch.update(Object.assign({},DEFAULT_CFG,d.cfg),Object.assign(EMPTY_OUT(),d.outfit));}catch(e){}
+  }
+});
+function updateRP(dt,t){
+  if(!RP.on||!RP.ch)return;
+  const k=Math.min(1,dt*10);
+  RP.x+=(RP.tx-RP.x)*k;RP.z+=(RP.tz-RP.z)*k;
+  let dd=RP.tface-RP.face;dd=Math.atan2(Math.sin(dd),Math.cos(dd));RP.face+=dd*k;
+  const vis=mode==='room'&&RP.room===curRoom;
+  RP.ch.root.visible=vis;
+  if(vis){
+    RP.ch.root.position.set(RP.x,0,RP.z);RP.ch.root.rotation.y=RP.face;
+    if(RP.emote)RP.et+=dt;if(RP.et>4)RP.emote=null;
+    RP.ch.tick(dt,t,RP.mv||0,RP.emote,RP.et);
+  }
+}
+function netUI(){
+  const body=$('#netbody');if(!body)return;
+  const s=NET.state();body.innerHTML='';
+  const mk=(txt,cls,fn)=>{const b2=document.createElement('button');b2.className=cls;b2.textContent=txt;b2.onclick=fn;return b2;};
+  if(s==='off'){
+    const p=document.createElement('p');p.innerHTML='兩台裝置都開著遊戲（需網路）。<br>一人建立房間拿到 <b>5 字房號</b>，另一人輸入房號就能一起玩、開語音！';
+    body.appendChild(p);
+    body.appendChild(mk('🏠 建立房間','ngreen',()=>{SND.click();NET.host();netUI();}));
+    const row=document.createElement('div');row.className='nrow';
+    const inp=document.createElement('input');inp.id='nCode';inp.maxLength=5;inp.placeholder='房號';
+    row.appendChild(inp);
+    row.appendChild(mk('🚪 加入','nblue',()=>{SND.click();NET.join(inp.value);netUI();}));
+    body.appendChild(row);
+  }else if(s==='wait'||s==='joining'){
+    const p=document.createElement('p');p.textContent=s==='wait'?'正在連上配對服務…':'正在連到房主…';body.appendChild(p);
+    body.appendChild(mk('❌ 取消','ngray',()=>{NET.leave();netUI();}));
+  }else if(s==='hosting'){
+    const c=document.createElement('div');c.className='ncode';c.textContent=NET.code();body.appendChild(c);
+    const p=document.createElement('p');p.innerHTML='把房號告訴朋友，等他加入…<br><small>第一次會詢問麥克風權限（語音用，可拒絕）</small>';body.appendChild(p);
+    body.appendChild(mk('❌ 取消','nred',()=>{NET.leave();netUI();}));
+  }else if(s==='on'){
+    const p=document.createElement('p');p.innerHTML='✅ 已連線'+(RP.on?('：<b>'+RP.name+'</b> 同行中'):'')+'<br>'+(NET.micOk()?'🔊 語音開啟中':'🎙 語音未啟用');body.appendChild(p);
+    const row=document.createElement('div');row.className='nrow';
+    if(NET.micOk())row.appendChild(mk(NET.muted()?'🎙 開麥克風':'🔇 靜音','nblue',function(){const m=NET.toggleMute();this.textContent=m?'🎙 開麥克風':'🔇 靜音';}));
+    row.appendChild(mk('❌ 離開連線','nred',()=>{NET.leave();netUI();}));
+    body.appendChild(row);
+  }
+}
+function openNet(){SND.resume();netUI();$('#netov').classList.add('show');}
+$('#bNet').onclick=()=>{if(!F.on){SND.click();openNet();}};
+$('#nClose').onclick=()=>$('#netov').classList.remove('show');
+
 /* ---------- 啟動 ---------- */
 const HASH=location.hash;
 if(/noblink/.test(HASH))me.blinkT=1e9;
@@ -2357,6 +2435,8 @@ if(/fight/.test(HASH)){mode='room';pos.set(-30,0,0);camPos.set(pos.x,6,pos.z+9);
     if(/orbs/.test(HASH)){Object.keys(ELEMS).forEach((k2,i)=>spawnOrb(pos.x-6+i*2.4,pos.z+2.2,k2));}
     const em2=HASH.match(/elem=(\w+)/);if(em2){F.elem={type:em2[1],t:60};}
     if(/pause/.test(HASH)){showPause();}
+    {const nm2=HASH.match(/net=(host|join):([A-Za-z0-9]+)/);
+     if(nm2){setTimeout(()=>{if(nm2[1]==='host')NET.host(nm2[2]);else NET.join(nm2[2]);openNet();},600);}}
     if(/occl/.test(HASH)){const e2=enemies[0];if(e2){e2.x=pos.x+0.3;e2.z=pos.z+2.3;e2.state='hit';e2.t=99;e2.kx=0;e2.kz=0;}}
     if(/refl/.test(HASH)){setTimeout(()=>{enemies.forEach(e2=>{e2.x=pos.x-16;e2.z=3;});fireShot(pos.x+4,pos.z,-1,0,7.5,8,'ball');face=Math.PI/2;setTimeout(()=>punch(),300);
       setTimeout(()=>{document.title=document.title.replace('歡樂派對','')+' |REFL rh='+(window._rh|0)+' rf='+(window._rf|0)+' atk='+(!!F.atk)+' face='+face.toFixed(2)+' on='+F.on+' m='+mode+' px='+(pos.x|0)+' cr='+curRoom+' en='+enemies.length+' P='+F.pause+' lq='+F.lvlQ+' stop='+F.stop.toFixed(2)+' slow='+F.slow.toFixed(2)+' ov='+$h('lvl').className+' '+(shots[0]?(shots[0].hostile?'H':'F')+' d='+Math.hypot(shots[0].x-pos.x,shots[0].z-pos.z).toFixed(1):'gone');},750);},1500);}
