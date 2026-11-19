@@ -221,6 +221,7 @@ const SND=(function(){
     ignite(){if(!ok())return;const t=ctx.currentTime;noise(t,0.3,0.4,1800,400);tone(210,t,0.3,'sawtooth',0.16,null,55);for(let i=0;i<3;i++)noise(t+0.1+i*0.07,0.03,0.2,3500,1500);},
     hole(){if(!ok())return;const t=ctx.currentTime;tone(190,t,0.9,'sine',0.35,null,36);noise(t,0.8,0.18,300,1800);},
     starPower(){if(!ok())return;const t=ctx.currentTime;[72,76,79,84,88,91,96,100].forEach((m,i)=>tone(mtof(m),t+i*0.05,0.16,'square',0.15));noise(t,0.45,0.12,6000,10000);tone(mtof(108),t+0.42,0.5,'triangle',0.14);},
+    deflect(){if(!ok())return;const t=ctx.currentTime;tone(1500,t,0.16,'triangle',0.32,null,2600);tone(620,t,0.08,'square',0.15,null,950);noise(t,0.06,0.28,6000,9500);},
     iceHit(){if(!ok())return;const t=ctx.currentTime;seq([96,100,103],0.05,'triangle',0.2,0.25);noise(t,0.2,0.25,8000,3000);},
     setIntensity(n){inten=n;}
   };
