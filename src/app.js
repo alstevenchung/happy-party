@@ -2889,6 +2889,7 @@ function updateRP(dt,t){
   }
   updateRPSwords(dt,t);
   updateRPFx(dt,t);
+  if(/netdbg/.test(HASH))window._rp={x:RP.x,z:RP.z,on:RP.on,t:performance.now()};
 }
 function drawAva(){
   const cv=document.getElementById('coAva');
