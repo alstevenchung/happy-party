@@ -198,6 +198,12 @@ body.fight #toast{top:auto;bottom:140px}
 .thint{color:#c17b92;font-weight:700;z-index:1;font-size:13px}
 body.fight #bUser{display:none!important}
 body.fight #bNet{display:none!important}
+#coHud{position:fixed;right:calc(10px*var(--uis,1));top:40%;display:none;flex-direction:column;align-items:center;gap:3px;z-index:6;background:rgba(255,252,245,.82);border-radius:16px;padding:8px 10px;box-shadow:0 3px 0 rgba(0,0,0,.12);pointer-events:none}
+#coAva{width:52px;height:52px;border-radius:50%;border:3px solid #f4a6c0;background:#fff}
+#coName{font-size:12px;font-weight:800;color:#5a4244;max-width:72px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#coHp{width:62px;height:9px;border-radius:5px;background:rgba(0,0,0,.14);overflow:hidden}
+#coHp i{display:block;height:100%;width:100%;background:#6bd47a;border-radius:5px}
+#coPing{font-size:11px;font-weight:800;color:#5a4244}
 #netov{position:fixed;inset:0;display:none;align-items:center;justify-content:center;background:rgba(30,20,40,.74);z-index:22}
 #netov.show{display:flex}
 .nbox{width:min(480px,94vw)}
@@ -405,6 +411,7 @@ body[data-mode=create] #joy{display:none}
 <div id="skills"></div>
 <div id="lvl"></div>
 <div id="pauseov"></div>
+<div id="coHud"><canvas id="coAva" width="64" height="64"></canvas><div id="coName"></div><div id="coHp"><i></i></div><div id="coPing"></div></div>
 <div id="netov"><div class="pbox nbox"><h2>🌐 連線同玩</h2><div id="netbody"></div><div class="pbtns"><button id="nClose">關閉視窗</button></div></div></div>
 <div id="killc"><small>擊殺數</small><b id="kcount">0</b></div>
 <div id="banner"></div><div id="icefx"></div><div id="firefx"></div><div id="thunderfx"></div><div id="zonefx"></div><div id="hurtfx"></div><div id="koov"></div>

@@ -98,26 +98,62 @@ const walkable=(x,z)=>AREAS.some(a=>x>=a.x0&&x<=a.x1&&z>=a.z0&&z<=a.z1);
   const bx=new THREE.Box3();
   room.group.updateMatrixWorld(true);
   for(const ch of room.group.children){
-    let zi=-1;
+    let zi=-1,hasL=false;
     try{
+      ch.traverse(o2=>{if(o2.isLight)hasL=true;});
+      if(!hasL){
       bx.setFromObject(ch);
       if(isFinite(bx.min.x)){
         const w=bx.max.x-bx.min.x,cx=(bx.min.x+bx.max.x)/2;
         if(w<30){zi=0;while(zi<7&&cx>DOORS[zi])zi++;}
+        const h2=bx.max.y-bx.min.y,dz2=bx.max.z-bx.min.z,r2=Math.hypot(w,h2,dz2)/2;
+        if(zi>=0&&r2<4.5&&h2>0.9)ch.userData.oc={x:cx,y:(bx.min.y+bx.max.y)/2,z:(bx.min.z+bx.max.z)/2,r:r2};
+      }
       }
     }catch(e){}
     ch.userData.zone=zi;
   }
+  if(/zonedbg/.test(location.hash)){const h={};for(const ch of room.group.children){const z=ch.userData.zone;h[z]=(h[z]||0)+1;}document.title='ZB '+JSON.stringify(h)+' n='+room.group.children.length;}
 })();
+function fadeObj(o,fv){
+  o.traverse(m2=>{
+    if(m2.isMesh&&m2.material){
+      if(!m2.userData.fm){
+        m2.userData.fm=1;
+        m2.material=Array.isArray(m2.material)?m2.material.map(x=>x.clone()):m2.material.clone();
+        const ms=Array.isArray(m2.material)?m2.material:[m2.material];
+        ms.forEach(x=>{x.userData.bOp=x.opacity;});
+      }
+      const ms=Array.isArray(m2.material)?m2.material:[m2.material];
+      ms.forEach(x=>{x.transparent=fv<0.98||x.userData.bOp<1;x.opacity=x.userData.bOp*fv;x.depthWrite=fv>0.6;});
+    }
+  });
+}
+function propOcclude(dt){
+  if(mode!=='room')return;
+  for(const ch of room.group.children){
+    const oc=ch.userData.oc;
+    if(!oc||!ch.visible)continue;
+    const occ=occludesLine(oc.x,oc.y,oc.z,Math.min(oc.r*0.7+0.4,2.4));
+    if(ch.userData.fA===undefined)ch.userData.fA=1;
+    if(!occ&&ch.userData.fA>0.985)continue;
+    const tf=occ?0.22:1;
+    ch.userData.fA+=(tf-ch.userData.fA)*Math.min(1,dt*10);
+    fadeObj(ch,ch.userData.fA);
+  }
+}
 let lastZV=-2;
 function applyZoneVis(){
   const cr=(mode==='room')?curRoom:-99;
   if(cr===lastZV)return;lastZV=cr;
+  let nv=0;
   for(const ch of room.group.children){
     const z=ch.userData.zone;
     if(z===undefined||z<0)continue;
-    ch.visible=(cr===-99)||Math.abs(z-cr)<=1;
+    ch.visible=(cr===-99)||z===cr;
+    if(ch.visible)nv++;
   }
+  if(/zonedbg/.test(HASH))document.title='ZV cr='+cr+' mode='+mode+' vis='+nv;
 }
 function roomOf(x,z){for(let i=0;i<8;i++){const a=AREAS[i];if(x>=a.x0&&x<=a.x1&&z>=a.z0&&z<=a.z1)return i;}
   return x<-18?0:x<-6?1:x<6?2:x<18?3:x<28?4:x<38?5:x<58?6:7;}
@@ -2331,7 +2367,7 @@ addEventListener('resize',resize);resize();
 const CAMP={head:[1.38,3.1],hair:[1.38,3.7],body:[0.95,5.3]};
 let rafArmed=false,lastLoopT=0;
 function armLoop(){if(rafArmed)return;rafArmed=true;requestAnimationFrame(ts=>{rafArmed=false;loop(ts);});}
-setInterval(()=>{if(performance.now()-lastLoopT>700)loop(performance.now());},400);
+if(!navigator.webdriver&&!/nowd/.test(location.hash))setInterval(()=>{if(performance.now()-lastLoopT>1600)loop(performance.now());},1000);
 function loop(now){
   armLoop();lastLoopT=performance.now();
   let dt=Math.min((now-last)/1000,0.05);last=now;if(F.pause||rotLock){dt=0;}else if(F.stop>0){F.stop-=dt;dt*=0.08;}else if(F.slow>0){F.slow-=dt;dt*=0.35;}t+=dt;
@@ -2390,6 +2426,8 @@ function loop(now){
   shadow.position.set(rp.x,0.02,rp.z);
   stage.tick(t);
   applyZoneVis();
+  propOcclude(dt);
+  coHudTick(dt);
   if(NET.state()==='on'){
     netAcc+=dt;
     if(netAcc>=0.1){netAcc=0;
@@ -2635,9 +2673,13 @@ NET.on('onState',(s,msg)=>{
 NET.on('onData',d=>{
   if(!d||!d.t)return;
   if(d.t==='hi'){
-    rpEnsure();RP.on=true;RP.name=(''+(d.name||'夥伴')).slice(0,12);
+    rpEnsure();RP.on=true;RP.name=(''+(d.name||'夥伴')).slice(0,12);RP.cfg=d.cfg;setTimeout(drawAva,800);
     try{RP.ch.update(Object.assign({},DEFAULT_CFG,d.cfg),Object.assign(EMPTY_OUT(),d.outfit));}catch(e){}
     RP.tx=RP.x=pos.x+1.2;RP.tz=RP.z=pos.z;toast('👋 '+RP.name+' 來了！');
+  }else if(d.t==='ping'){
+    NET.send({t:'pong',ts:d.ts});
+  }else if(d.t==='pong'){
+    RP.ping=Math.round(performance.now()-d.ts);
   }else if(d.t==='st'){
     RP.tx=d.x;RP.tz=d.z;RP.tface=d.f;RP.mv=d.m;RP.room=d.r;RP.hp=d.h;RP.hpm=d.hm||100;
     if(d.e&&d.e!==RP.emote){RP.emote=d.e;RP.et=0;}
@@ -2657,6 +2699,7 @@ NET.on('onData',d=>{
   }else if(d.t==='xp'){gainXP(d.n||1);if(d.bko)banner('🏆 魔王擊破！','fight');
   }else if(d.t==='fend'){if(isCl()){coLeave();toast('🏳 房主離開了戰場');}
   }else if(d.t==='out'){
+    RP.cfg=d.cfg;setTimeout(drawAva,300);
     if(RP.ch)try{RP.ch.update(Object.assign({},DEFAULT_CFG,d.cfg),Object.assign(EMPTY_OUT(),d.outfit));}catch(e){}
   }
 });
@@ -2683,6 +2726,38 @@ function updateRP(dt,t){
     RP.ch.root.position.set(RP.x,0,RP.z);RP.ch.root.rotation.y=RP.face;
     if(RP.emote)RP.et+=dt;if(RP.et>4)RP.emote=null;
     RP.ch.tick(dt,t,RP.mv||0,RP.emote,RP.et);
+  }
+}
+function drawAva(){
+  const cv=document.getElementById('coAva');
+  if(!cv||!RP.ch||!RP.ch.faceCv)return;
+  const g2=cv.getContext('2d'),fc=RP.ch.faceCv;
+  g2.clearRect(0,0,64,64);
+  g2.fillStyle='#ffe3c8';g2.beginPath();g2.arc(32,32,32,0,2*PI);g2.fill();
+  g2.save();g2.beginPath();g2.arc(32,32,32,0,2*PI);g2.clip();
+  const s2=Math.min(fc.width,fc.height);
+  g2.drawImage(fc,(fc.width-s2)/2,(fc.height-s2)/2,s2,s2,4,4,56,56);
+  g2.restore();
+}
+let coAcc=0,pingAcc=0;
+function coHudTick(dt){
+  const el=document.getElementById('coHud');if(!el)return;
+  const show=NET.state()==='on'&&RP.on;
+  el.style.display=show?'flex':'none';
+  if(!show)return;
+  pingAcc+=dt;
+  if(pingAcc>=2){pingAcc=0;NET.send({t:'ping',ts:performance.now()});if(Math.random()<0.5)drawAva();}
+  coAcc+=dt;
+  if(coAcc>=0.3){
+    coAcc=0;
+    document.getElementById('coName').textContent=RP.name||'夥伴';
+    const r=Math.max(0,Math.min(1,(RP.hp===undefined?100:RP.hp)/(RP.hpm||100)));
+    const bar=document.querySelector('#coHp i');
+    bar.style.width=(r*100).toFixed(0)+'%';
+    bar.style.background=r>0.5?'#6bd47a':(r>0.25?'#f7c84a':'#e8505b');
+    const pe=document.getElementById('coPing');
+    if(RP.ping===undefined)pe.textContent='📶 …';
+    else{pe.textContent='📶 '+RP.ping+'ms';pe.style.color=RP.ping<120?'#2f9e5b':(RP.ping<280?'#c08a00':'#d04545');}
   }
 }
 function netUI(){
