@@ -2687,6 +2687,10 @@ function rpEnsure(){
     RP.bar=makeBar();RP.bar.visible=false;
     RP.ring=new THREE.Mesh(new THREE.RingGeometry(0.5,0.66,28),new THREE.MeshBasicMaterial({transparent:true,opacity:0.55,side:2,depthWrite:false,blending:THREE.AdditiveBlending}));
     RP.ring.rotation.x=-PI/2;RP.ring.visible=false;scene.add(RP.ring);
+    RP.swimR=new THREE.Mesh(new THREE.RingGeometry(0.42,0.56,26),new THREE.MeshBasicMaterial({color:0xdff4ff,transparent:true,opacity:0.5,side:2,depthWrite:false,blending:THREE.AdditiveBlending}));
+    RP.swimR.rotation.x=-PI/2;RP.swimR.visible=false;scene.add(RP.swimR);
+    RP.tornC=new THREE.Mesh(new THREE.ConeGeometry(1.25,2.6,14,1,true),new THREE.MeshBasicMaterial({color:0xcfeaff,transparent:true,opacity:0.3,side:2,depthWrite:false,blending:THREE.AdditiveBlending}));
+    RP.tornC.visible=false;scene.add(RP.tornC);
   }
 }
 function netSendHello(){NET.send({t:'hi',name:NET.isHost()?'房主':'夥伴',cfg,outfit,sk:F.sk});}
@@ -2723,7 +2727,12 @@ NET.on('onData',d=>{
     RP.tx=RP.x=pos.x+1.2;RP.tz=RP.z=pos.z;toast('👋 '+RP.name+' 來了！');
   }else if(d.t==='sk'){
     const old=RP.sk||{};RP.sk=d.sk||{};
-    for(const k in RP.sk){if((old[k]|0)<RP.sk[k]){const s3=SK.find(s2=>s2.id===k);if(s3)toast('🤝 '+(RP.name||'夥伴')+'：'+s3.n+' Lv'+RP.sk[k]);}}
+    let up2=false;
+    for(const k in RP.sk){if((old[k]|0)<RP.sk[k]){up2=true;const s3=SK.find(s2=>s2.id===k);if(s3)toast('🤝 '+(RP.name||'夥伴')+'：'+s3.n+' Lv'+RP.sk[k]);}}
+    if(up2&&RP.ch&&RP.ch.root.visible){
+      groundRing(RP.x,RP.z,0xffd24a,4,0.6,0.15);
+      for(let i2=0;i2<14;i2++)emit(RP.x+(Math.random()-0.5)*1.4,0.2,RP.z+(Math.random()-0.5)*1.4,0,3+Math.random()*3,0,0,'#ffe27a',0.9,0.35,-0.5,0.1);
+    }
   }else if(d.t==='fx'){
     if(RP.ch&&RP.ch.root.visible){
       if(d.k===1)dmgNum(RP.x,2.5,RP.z,'閃避!','#9fe0ff');
@@ -2796,6 +2805,7 @@ function updateRPFx(dt,t){
     rpRain=false;
     if(RP.ch)RP.ch.root.traverse(o=>{if(o.isMesh&&!o.userData.ol&&o.material&&o.material.emissive)o.material.emissive.setHex(0);});
   }
+  if(RP.tornC){RP.tornC.visible=!!(vis2&&(RP.fxb&4));if(RP.tornC.visible){RP.tornC.position.set(RP.x,1.5,RP.z);RP.tornC.rotation.y=t*14;}}
   if(vis2&&(RP.fxb&4)){
     RP.ch.root.rotation.y=t*20;
     RP.ch.root.position.y=0.75+Math.sin(t*8)*0.12;
@@ -2803,8 +2813,11 @@ function updateRPFx(dt,t){
     if(rpFxA2<=0){rpFxA2=0.06;const an2=Math.random()*6.28;emit(RP.x+Math.cos(an2)*0.9,0.2+Math.random()*1.6,RP.z+Math.sin(an2)*0.9,-Math.sin(an2)*3,1.5,Math.cos(an2)*3,0,'#cfeaff',0.4,0.3,0,0.3);}
   }
   if(vis2&&(RP.fxb&2)){
+    if(!RP.ultB){RP.ultB=new THREE.Mesh(new THREE.CylinderGeometry(0.55,0.55,7,16,1,true),new THREE.MeshBasicMaterial({color:0xffd24a,transparent:true,opacity:0.3,side:2,depthWrite:false,blending:THREE.AdditiveBlending}));scene.add(RP.ultB);}
+    RP.ultB.visible=true;RP.ultB.position.set(RP.x,3.5,RP.z);RP.ultB.scale.setScalar(1+0.12*Math.sin(t*9));
     if(Math.random()<0.4)emit(RP.x+(Math.random()-0.5)*1.2,0.2,RP.z+(Math.random()-0.5)*1.2,0,3+Math.random()*2,0,0,'#ffd24a',0.6,0.35,-0.5,0.1);
   }
+  if(RP.ultB&&!(vis2&&(RP.fxb&2)))RP.ultB.visible=false;
   if(RP.pf&&RP.et>0.07){
     RP.pf=false;
     const SL2=(RP.sk&&RP.sk.shock)|0;
@@ -2848,6 +2861,7 @@ function updateRP(dt,t){
     const rpSwim=RP.room===7&&RP.z<-1.85;
     RP.ch.root.position.set(RP.x,rpSwim?-0.5:(RP.ay||0),RP.z);RP.ch.root.rotation.y=RP.face;
     RP.ch.setPose((RP.fxb&8)?'lie':(RP.pose||null));
+    if(RP.swimR){RP.swimR.visible=rpSwim;if(rpSwim){RP.swimR.position.set(RP.x,0.04,RP.z);RP.swimR.scale.setScalar(1+0.1*Math.sin(t*3.4));}}
     if(RP.emote)RP.et+=dt;if(RP.et>4)RP.emote=null;
     RP.ch.tick(dt,t,RP.mv||0,(RP.fxb&2)?'ult':RP.emote,(RP.fxb&2)?0.5:RP.et);
   }
