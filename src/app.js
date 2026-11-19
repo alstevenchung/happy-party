@@ -2620,8 +2620,20 @@ function coShots(rows){
       scene.add(m);CO.shots[i]={m,missile};
     }
     const s=CO.shots[i];
-    s.m.position.set(r[0],s.missile?1.6:1.2,r[1]);
+    s.fx=(s.cx!==undefined)?s.cx:r[0];s.fz=(s.cz!==undefined)?s.cz:r[1];
+    s.tx=r[0];s.tz=r[1];s.t0=performance.now();
+    if(s.cx===undefined){s.cx=r[0];s.cz=r[1];s.m.position.set(r[0],s.missile?1.6:1.2,r[1]);}
     s.m.material.color.setHex(r[2]?(s.missile?0xff5a3c:0xf2f6ff):(s.missile?0x7fd8ff:0xffd24a));
+  }
+}
+function coShotsTick(){
+  const now=performance.now();
+  for(const s of CO.shots){
+    if(s.tx===undefined)continue;
+    const k=Math.min(1.25,(now-(s.t0||now))/50);
+    s.cx=s.fx+(s.tx-s.fx)*k;s.cz=s.fz+(s.tz-s.fz)*k;
+    s.m.position.set(s.cx,s.missile?1.6:1.2,s.cz);
+    if(s.missile){const dx2=s.tx-s.fx,dz2=s.tz-s.fz;if(Math.hypot(dx2,dz2)>0.01){s.m.rotation.z=-Math.atan2(dx2,0.001)*0;s.m.rotation.x=PI/2;s.m.rotation.y=Math.atan2(dx2,dz2);}}
   }
 }
 function coBossEs(bo){
@@ -2667,6 +2679,7 @@ function bufSample(o){
   const s=b[b.length-1];_bs.x=s.x;_bs.z=s.z;_bs.f=s.f;return true;
 }
 function clientEnemiesInterp(dt,t2){
+  coShotsTick();
   for(const e of enemies){
     const px0=e.x,pz0=e.z;
     if(bufSample(e)){e.x=_bs.x;e.z=_bs.z;e.face=_bs.f;}
