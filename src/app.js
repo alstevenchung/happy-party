@@ -2696,7 +2696,9 @@ NET.on('onState',(s,msg)=>{
   if(s==='on'){
     if(F.on)stopFight();
     F.wave=1;F.upN=0;F.xp=0;F.xpNeed=4;F.sk={};F.bossN=0;F.bossWave=0;F.kills=0;F.score=0;F.gauge=0;F.hp=F.max;F.elem=null;clearStar();
+    if(/skills5/.test(location.hash)){SK.forEach(s2=>F.sk[s2.id]=5);F.cloneCd=0.5;}
     skillHud();hud();save();
+    if(NET.state()==='on')NET.send({t:'sk',sk:F.sk});
     if(!NET.isHost())addRecent(NET.code());
     toast('🤝 連線成功！共鬥從第 1 波全新開始');SND.sparkle();netSendHello();
   }
