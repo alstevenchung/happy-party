@@ -334,6 +334,22 @@ body[data-mode=create] #joy{display:none}
 /* 保險：確保戰鬥按鈕永遠貼右（曾在窄直向被未知規則擠出畫面） */
 #fbtns{left:auto !important;right:calc(24px + env(safe-area-inset-right,0px)) !important}
 @media (max-height:460px) and (orientation:landscape){#fbtns{right:calc(14px + env(safe-area-inset-right,0px)) !important}}
+/* ===== 強制橫向提示 ===== */
+#rotlock{position:fixed;inset:0;z-index:60;display:none;flex-direction:column;align-items:center;justify-content:center;gap:16px;background:linear-gradient(160deg,#ffe3ec,#fff6d8 50%,#d8f3ff);text-align:center;padding:20px}
+#rotlock.show{display:flex}
+#rotlock .ph{font-size:76px;animation:rotp 1.8s ease-in-out infinite}
+@keyframes rotp{0%,18%{transform:rotate(0)}55%,82%{transform:rotate(90deg)}100%{transform:rotate(90deg)}}
+#rotlock b{font-size:22px;color:#5a4244}
+#rotlock span{font-size:14px;color:#b0707f}
+/* ===== HUD 依畫面等比縮放 ===== */
+#mmap{transform-origin:top left;transform:scale(var(--uis,1));opacity:.88}
+#skills{transform-origin:top left;transform:scale(var(--uis,1))}
+#killc{transform-origin:top right;transform:scale(var(--uis,1))}
+#hud{transform:translateX(-50%) scale(var(--uis,1));transform-origin:top center}
+#bossbar{transform:translateX(-50%) scale(var(--uis,1));transform-origin:top center}
+#fbtns{transform-origin:bottom right;transform:scale(var(--uib,1))}
+#elembuff,#starbuff{transform-origin:bottom right;transform:scale(var(--uib,1))}
+#joy{transform-origin:bottom left;transform:scale(var(--uib,1))}
 </style>
 </head>
 <body data-mode="create">
@@ -381,6 +397,7 @@ body[data-mode=create] #joy{display:none}
 </div>
 <div id="hint">左半邊按住任意處＝搖桿　輕點地板走過去　右半邊拖曳轉視角　兩指縮放</div>
 <div id="toast"></div>
+<div id="rotlock"><div class="ph">📱</div><b>請把裝置轉成橫向遊玩</b><span>橫向畫面才放得下完整的戰鬥介面喔！</span></div>
 <div id="title">
   <div class="tdeco"><i></i><i></i><i></i><i></i><i></i><i></i></div>
   <div class="tlogo">歡樂派對</div>
