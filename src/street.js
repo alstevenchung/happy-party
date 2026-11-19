@@ -15,7 +15,7 @@ function buildStreet(G,boxes){
   const pave=canvasTex(256,256,(g,w,h)=>{g.fillStyle='#e9dcc8';g.fillRect(0,0,w,h);g.strokeStyle='#d3c3aa';g.lineWidth=3;
     for(let i=0;i<=4;i++){g.beginPath();g.moveTo(i*64,0);g.lineTo(i*64,h);g.stroke();g.beginPath();g.moveTo(0,i*64);g.lineTo(w,i*64);g.stroke();}
     g.fillStyle='rgba(255,255,255,.35)';g.fillRect(70,70,52,52);g.fillRect(6,6,52,52);},[20,5]);
-  const gr=plane(X1-X0+2,10,LAMB({map:pave}),CX,0,-1,0);gr.rotation.x=-PI/2;
+  const gr=plane(X1-X0+2,14,LAMB({map:pave}),CX,0,1,0);gr.rotation.x=-PI/2;
   const grass=plane(80,14,mm('#a8d492'),CX,-0.02,11,0);grass.rotation.x=-PI/2;
   const grass2=plane(80,6,mm('#a8d492'),CX,-0.02,-9,0);grass2.rotation.x=-PI/2;
 
@@ -126,7 +126,7 @@ function buildStreet(G,boxes){
     const f=new THREE.Mesh(new THREE.ConeGeometry(0.16,0.34,3),mm(['#f48fb1','#f7d44a','#6bb6f2','#9bd45a','#ffffff'][i%5]));f.position.set(x,y,-0.8);f.rotation.z=PI;G.add(f);}
   box(37,0.03,0.03,'#8a8a92',CX,5.0,-0.8);
   // 圍籬（前緣）+ 左端擋牆
-  for(let i=0;i<20;i++){const x=X0+1+i*2,hh=0.8+rnd(i)*0.25;box(2.0,hh,0.8,'#78b868',x,hh/2,4.3);}
+  for(let i=0;i<20;i++){const x=X0+1+i*2,hh=0.8+rnd(i)*0.25;box(2.0,hh,0.8,'#78b868',x,hh/2,7.3);}
   box(0.8,1.2,10,'#78b868',X0-0.5,0.6,-1);
 
   /* ---- 角色資料（由 app 建立真實的 Character） ---- */
@@ -168,5 +168,5 @@ function buildStreet(G,boxes){
 
   boxes.forEach(b=>{if(b.x1<-19&&b.z0>1.5)b.front=true;});
   const front=[];G.children.forEach(o=>{if(o.position.x<-19&&o.position.z>1.7&&o.position.z<3.7&&o.geometry&&o.geometry.type!=='PlaneGeometry')front.push(o);});
-  return {front,clouds,area:{n:'商店街',x0:X0+1,x1:X1,z0:-5.2,z1:3.5},npcs,shops:SH};
+  return {front,clouds,area:{n:'商店街',x0:X0+1,x1:X1,z0:-5.2,z1:6.5},npcs,shops:SH};
 }
