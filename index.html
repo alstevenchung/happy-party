@@ -5007,9 +5007,9 @@ function loop(now){
   if(NET.state()==='on'){
     const rn2=performance.now();
     if(rn2-netAcc>=50){netAcc=rn2;
-      NET.send({t:'st',x:pos.x,z:pos.z,f:face,m:moveAmt,r:curRoom,h:Math.round(F.hp),hm:F.max,c:F.clone?[+F.clone.x.toFixed(2),+F.clone.z.toFixed(2)]:0,el:F.elem?F.elem.type:0,b:(F.star>0?1:0)|(F.ult?2:0)|(F.torn?4:0)|(F.dead?8:0),p:me.poseName||0,ay:+(+actY).toFixed(2),e:emote?emote.type:(F.atk?F.atk.type:(F.charging||F.tc?'charge':null))});
+      NET.send({t:'st',ts:Math.round(rn2),x:pos.x,z:pos.z,f:face,m:moveAmt,r:curRoom,h:Math.round(F.hp),hm:F.max,c:F.clone?[+F.clone.x.toFixed(2),+F.clone.z.toFixed(2)]:0,el:F.elem?F.elem.type:0,b:(F.star>0?1:0)|(F.ult?2:0)|(F.torn?4:0)|(F.dead?8:0),p:me.poseName||0,ay:+(+actY).toFixed(2),e:emote?emote.type:(F.atk?F.atk.type:(F.charging||F.tc?'charge':null))});
       if(isHo()&&F.on){
-        const es={t:'es',w:F.wave,k:F.kills,s:F.score,en:[],sh:shots.map(s2=>[+s2.x.toFixed(2),+s2.z.toFixed(2),s2.hostile?1:0,s2.missile?1:0]),
+        const es={t:'es',ts:Math.round(rn2),w:F.wave,k:F.kills,s:F.score,en:[],sh:shots.map(s2=>[+s2.x.toFixed(2),+s2.z.toFixed(2),s2.hostile?1:0,s2.missile?1:0]),
           pk:packs.map(p2=>[+p2.x.toFixed(1),+p2.z.toFixed(1)]),ob:orbs.map(o2=>[+o2.x.toFixed(1),+o2.z.toFixed(1),o2.type]),
           st:starObj?[+starObj.x.toFixed(1),+starObj.z.toFixed(1)]:0,
           bo:F.boss?[Math.round(F.boss.hp),F.boss.max,+F.boss.x.toFixed(2),+F.boss.z.toFixed(2),+F.boss.face.toFixed(2),F.boss.state,F.bossN]:0};
@@ -5109,7 +5109,7 @@ function coApplyEs(d){
     const id=row[0];seen.add(id);
     let rec=CO.en.get(id);
     if(!rec){rec=coSpawnRec(id);if(!rec)continue;rec.x=rec.tx=row[1];rec.z=rec.tz=row[2];}
-    rec.tx=row[1];rec.tz=row[2];rec.tface=row[3];bufPush(rec,row[1],row[2],row[3]);
+    rec.tx=row[1];rec.tz=row[2];rec.tface=row[3];bufPush(rec,row[1],row[2],row[3],d.ts);
     const hp=row[4];
     if(hp<rec.shownHp-0.5&&rec.state!=='ko'){dmgNum(rec.x,2.1*rec.sc,rec.z,Math.round(rec.shownHp-hp),'#fff6d8');}
     rec.shownHp=rec.hp=hp;
@@ -5166,7 +5166,7 @@ function coBossEs(bo){
   if(CO.boss&&bo){
     const B=CO.boss;
     if(bo[0]<B.hp)dmgNum(B.x,5.2,B.z,Math.round(B.hp-bo[0]),'#fff6d8');
-    B.hp=bo[0];B.max=bo[1];B.tx=bo[2];B.tz=bo[3];B.tface=bo[4];B.state=bo[5];B.n=bo[6];bufPush(B,bo[2],bo[3],bo[4]);
+    B.hp=bo[0];B.max=bo[1];B.tx=bo[2];B.tz=bo[3];B.tface=bo[4];B.state=bo[5];B.n=bo[6];bufPush(B,bo[2],bo[3],bo[4],d.ts);
   }
   if(!bo&&CO.boss){
     const B=CO.boss;
@@ -5175,11 +5175,17 @@ function coBossEs(bo){
     scene.remove(B.g);CO.boss=null;
   }
 }
-function bufPush(o,x,z,f){const b=o._nb||(o._nb=[]);b.push({t:performance.now(),x,z,f});if(b.length>14)b.shift();}
+let netOff=null;
+function netT(ts){
+  const o=performance.now()-ts;
+  if(netOff===null||o<netOff)netOff=o;else netOff+=0.06;
+  return ts+netOff;
+}
+function bufPush(o,x,z,f,ts){const b=o._nb||(o._nb=[]);b.push({t:(ts!==undefined&&ts!==null)?netT(ts):performance.now(),x,z,f});if(b.length>14)b.shift();}
 const _bs={x:0,z:0,f:0};
 function bufSample(o){
   const b=o._nb;if(!b||!b.length)return false;
-  const rt=performance.now()-120;
+  const rt=performance.now()-140;
   if(rt<=b[0].t||b.length===1){const s=b[0];_bs.x=s.x;_bs.z=s.z;_bs.f=s.f;return true;}
   for(let i=b.length-1;i>=0;i--){
     if(b[i].t<=rt){
@@ -5301,7 +5307,7 @@ NET.on('onData',d=>{
   }else if(d.t==='pong'){
     RP.ping=Math.round(performance.now()-d.ts);
   }else if(d.t==='st'){
-    RP.tx=d.x;RP.tz=d.z;RP.tface=d.f;RP.mv=d.m;RP.room=d.r;RP.hp=d.h;RP.hpm=d.hm||100;bufPush(RP,d.x,d.z,d.f);
+    RP.tx=d.x;RP.tz=d.z;RP.tface=d.f;RP.mv=d.m;RP.room=d.r;RP.hp=d.h;RP.hpm=d.hm||100;bufPush(RP,d.x,d.z,d.f,d.ts);
     RP.elem=d.el|0;RP.fxb=d.b|0;RP.pose=d.p||null;RP.ay=+d.ay||0;
     if(d.c&&!RP.clone){RP.clone={x:d.c[0],z:d.c[1]};RP.cloneNew=true;}
     else if(!d.c&&RP.clone){RP.cloneGone={x:RP.clone.x,z:RP.clone.z};RP.clone=null;}
