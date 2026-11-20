@@ -8,7 +8,7 @@ const NET=(function(){
   const MAXC=3;
   const links=new Map();let nextPid=1;
   const calls=[],audios=[];
-  const L={onState:null,onData:null,onPeer:null};
+  const L={onState:null,onData:null,onPeer:null,info:null};
   const CH='ABCDEFGHJKMNPQRSTUVWXYZ23456789';
   function mkCode(){let c='';for(let i=0;i<5;i++)c+=CH[(Math.random()*CH.length)|0];return c;}
   function setState(s,msg){state=s;if(L.onState)try{L.onState(s,msg||'');}catch(e){if(/nettest/.test(location.hash))document.title='NETERR '+(e&&e.message);}}
@@ -78,12 +78,112 @@ const NET=(function(){
     c.on('close',()=>{if(conn===c)cleanup('房主已離開，連線結束');});
     c.on('error',()=>{if(conn===c)cleanup('連線中斷');});
   }
-  function host(forced){
+  /* ---------- 大廳：公開房間列表 ----------
+     固定代號 LOBBY。公開房的房主都會去搶這個代號：搶到的當大廳（記住所有公開房），
+     沒搶到的向大廳登記並定時回報人數。大廳消失時，各房主隔一小段隨機時間再搶，自動接手。 */
+  const LOBBY='hp2lobby1'+(((/[#&]lob=([A-Za-z0-9]+)/.exec(location.hash)||[])[1])||'');   // lob= 只給自動測試用，避免測試房出現在真正的列表
+  let pub=false,lobPeer=null,lobConn=null,lobTimer=null,lobRetry=null,lobOkT=0;
+  const lobCs=new Set();
+  const lobRooms=new Map();
+  function lobInfo(){let w=1;try{if(L.info){const o=L.info();w=(o&&o.w)|0;}}catch(e){}return {n:links.size+1,w:w||1};}
+  function lobList(){
+    const now=Date.now(),out=[];
+    if(pub&&state!=='off'&&state!=='wait'){const me=lobInfo();out.push({code,n:me.n,w:me.w});}
+    lobRooms.forEach((v,k)=>{if(now-v.ts<50000)out.push({code:k,n:v.n,w:v.w});else lobRooms.delete(k);});
+    return out.slice(0,24);
+  }
+  function lobAgain(ms){clearTimeout(lobRetry);lobRetry=setTimeout(()=>{if(pub&&state!=='off'&&!lobPeer&&!(lobConn&&lobConn.open))lobTry();},ms);}
+  function lobTry(){
+    if(!pub||state==='off'||typeof Peer==='undefined')return;
+    let p;try{p=newPeer(LOBBY);}catch(e){lobAgain(4000);return;}
+    p.on('open',()=>{
+      if(!pub||state==='off'){try{p.destroy();}catch(e){}return;}
+      lobPeer=p;lobRooms.clear();
+      p.on('connection',c=>{
+        // 登記的房號一律取自對方的連線代號（'hp2'+房號），不能冒名登記別人的房
+        const rc=(typeof c.peer==='string'&&c.peer.indexOf('hp2')===0&&c.peer!==LOBBY&&/^[A-Z0-9]{3,8}$/.test(c.peer.slice(3)))?c.peer.slice(3):null;
+        lobCs.add(c);
+        c.on('data',d=>{
+          if(!d)return;
+          if(d.t==='reg'&&rc){if(lobRooms.size<40||lobRooms.has(rc))lobRooms.set(rc,{n:Math.max(1,Math.min(9,d.n|0)),w:Math.max(1,Math.min(999,d.w|0)),ts:Date.now()});try{c.send({t:'ok'});}catch(e){}}
+          else if(d.t==='list'){try{c.send({t:'rooms',rooms:lobList()});}catch(e){}}
+        });
+        c.on('close',()=>{lobCs.delete(c);if(rc)lobRooms.delete(rc);});
+        c.on('error',()=>{lobCs.delete(c);if(rc)lobRooms.delete(rc);});
+      });
+    });
+    p.on('error',e=>{
+      if(lobPeer===p)return;
+      try{p.destroy();}catch(_){}
+      if(e&&e.type==='unavailable-id')lobJoin();else lobAgain(4000);
+    });
+    p.on('disconnected',()=>{if(lobPeer===p)try{p.reconnect();}catch(e){}});
+  }
+  function lobJoin(){
+    if(!pub||!peer||state==='off')return;
+    let c;try{c=peer.connect(LOBBY,{reliable:true});}catch(e){lobAgain(3000);return;}
+    lobConn=c;lobOkT=Date.now();
+    c.on('open',()=>{lobOkT=Date.now();lobBeat();});
+    const gone=()=>{if(lobConn===c){lobConn=null;try{c.close();}catch(e){}lobAgain(400+Math.random()*2200);}};
+    c.on('data',d=>{if(!d)return;if(d.t==='ok')lobOkT=Date.now();else if(d.t==='bye')gone();});
+    c.on('close',gone);c.on('error',gone);
+    c._gone=gone;
+    setTimeout(()=>{if(lobConn===c&&!c.open){lobConn=null;try{c.close();}catch(e){}lobAgain(300+Math.random()*1500);}},7000);
+  }
+  function lobBeat(){
+    if(!pub)return;
+    if(lobConn&&lobConn.open){
+      // 大廳超過 13 秒沒回應＝已經不在了，重新搶
+      if(Date.now()-lobOkT>13000){if(lobConn._gone)lobConn._gone();return;}
+      const me=lobInfo();try{lobConn.send({t:'reg',n:me.n,w:me.w});}catch(e){}
+    }
+    else if(!lobPeer&&!lobConn)lobAgain(200);
+  }
+  function lobStart(){pub=true;clearInterval(lobTimer);lobTimer=setInterval(lobBeat,5000);lobTry();}
+  function lobStop(){
+    pub=false;clearInterval(lobTimer);clearTimeout(lobRetry);lobTimer=null;
+    try{if(lobConn)lobConn.close();}catch(e){}lobConn=null;
+    // 當大廳的人離開：先跟所有人說一聲，他們會立刻重新選出新大廳
+    lobCs.forEach(c=>{try{c.send({t:'bye'});}catch(e){}});
+    const cs=[...lobCs],lp=lobPeer;lobCs.clear();lobPeer=null;lobRooms.clear();
+    if(lp)setTimeout(()=>{cs.forEach(c=>{try{c.close();}catch(e){}});try{lp.destroy();}catch(e){}},250);
+  }
+  // 想加入的人：持續向大廳要列表。回傳 stop()
+  function lobbyWatch(cb){
+    if(typeof Peer==='undefined'){try{cb([],false);}catch(e){}return ()=>{};}
+    let tp=null,c=null,dead=false,iv=null,gotT=0;
+    const ask=()=>{
+      if(dead)return;
+      if(c&&c.open){
+        if(gotT&&Date.now()-gotT>10000){const o=c;c=null;gotT=0;try{o.close();}catch(e){}try{cb([],true);}catch(e){}}
+        else{try{c.send({t:'list'});}catch(e){}return;}
+      }
+      if(c)return;
+      try{c=tp.connect(LOBBY,{reliable:true});}catch(e){c=null;return;}
+      const cc=c;
+      cc.on('open',()=>{gotT=Date.now();try{cc.send({t:'list'});}catch(e){}});
+      cc.on('data',d=>{
+        if(dead||!d)return;
+        if(d.t==='bye'){if(c===cc){c=null;gotT=0;try{cc.close();}catch(e){}setTimeout(ask,1500);}return;}
+        if(d.t==='rooms'&&Array.isArray(d.rooms)){gotT=Date.now();try{cb(d.rooms.filter(r=>r&&typeof r.code==='string'&&/^[A-Z0-9]{3,8}$/.test(r.code)).slice(0,24),true);}catch(e){}}
+      });
+      const gone=()=>{if(c===cc)c=null;};
+      cc.on('close',gone);cc.on('error',gone);
+      setTimeout(()=>{if(c===cc&&!cc.open){c=null;try{cc.close();}catch(e){}}},6000);
+    };
+    try{tp=newPeer(undefined);}catch(e){try{cb([],false);}catch(e2){}return ()=>{};}
+    tp.on('open',()=>{ask();iv=setInterval(ask,4000);});
+    tp.on('error',e=>{if(e&&e.type==='peer-unavailable'){c=null;if(!dead)try{cb([],true);}catch(e2){}}});
+    tp.on('disconnected',()=>{if(!dead)try{tp.reconnect();}catch(e){}});
+    return ()=>{dead=true;clearInterval(iv);try{if(c)c.close();}catch(e){}try{tp.destroy();}catch(e){}};
+  }
+  function host(forced,opt){
     cleanup();isHost=true;code=(forced||mkCode()).toUpperCase();
+    const wantPub=!!(opt&&opt.pub);
     if(typeof Peer==='undefined'){setState('off','此環境缺少連線元件');return code;}
     setState('wait','正在連上配對服務…');
     peer=newPeer('hp2'+code);
-    peer.on('open',()=>{if(state==='wait')setState('hosting');getMic();});
+    peer.on('open',()=>{if(state==='wait')setState('hosting');getMic();if(wantPub&&!pub)lobStart();});
     peer.on('connection',c=>{
       if(c.label==='fast'){
         const find=()=>{for(const lk of links.values())if(lk.peerId===c.peer)return lk;return null;};
@@ -108,6 +208,7 @@ const NET=(function(){
     });
     peer.on('call',cl=>{cl.answer(micStream||undefined);wireCall(cl);});
     peer.on('error',e=>{
+      if(e&&e.type==='peer-unavailable'&&/hp2lobby/.test((e&&e.message)||'')){lobConn=null;if(pub)lobAgain(300+Math.random()*1500);return;}
       if(e&&e.type==='unavailable-id')setState('off','房號撞號了，請再建一次');
       else if(state==='wait')setState('off','配對服務連不上（需要網路）');
     });
@@ -248,6 +349,7 @@ const NET=(function(){
   function sendTo(pid,o,quick){const lk=links.get(pid);if(lk)put(lk,o,quick);}
   function sendExcept(pid,o,quick){for(const lk of links.values())if(lk.pid!==pid)put(lk,o,quick);}
   function cleanup(msg){
+    lobStop();
     if(mpend){try{mpend.pc.close();}catch(e){}mpend=null;}
     if(mpc){const p0=mpc;mpc=null;try{p0.close();}catch(e){}}
     for(const lk of [...links.values()]){try{if(lk.fast)lk.fast.close();}catch(e){}try{lk.conn.close();}catch(e){}try{if(lk.pc)lk.pc.close();}catch(e){}}
@@ -299,7 +401,7 @@ const NET=(function(){
     if(isHost){for(const lk of links.values())if(lk.fast&&lk.fast.open)return true;return false;}
     return !!(fast&&fast.open);
   }
-  return {host,join,send,sendTo,sendExcept,manualHost,manualAccept,manualJoin,isManual:()=>manual,_pack:packSdp,_unpack:unpackSdp,
+  return {host,join,send,sendTo,sendExcept,lobbyWatch,isPublic:()=>pub,isLobby:()=>!!lobPeer,_lob:()=>({pub,holder:!!lobPeer,reg:!!(lobConn&&lobConn.open),rooms:lobList()}),manualHost,manualAccept,manualJoin,isManual:()=>manual,_pack:packSdp,_unpack:unpackSdp,
     leave:()=>cleanup('已離開連線'),toggleMute,enableVoice,probe,
     state:()=>state,fast:fastOk,code:()=>code,isHost:()=>isHost,muted:()=>muted,micOk:()=>micOk,
     myId:()=>myId,count:()=>links.size,max:()=>MAXC+1,pids:()=>[...links.keys()],pendingManual:()=>!!mpend,
