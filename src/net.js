@@ -42,6 +42,7 @@ const NET=(function(){
           f.on('error',()=>{if(fast===f)fast=null;});
         }
       }catch(e){}
+      if(manual)return;
       await getMic();
       if(!isHost&&micStream&&peer){const cl=peer.call(c.peer,micStream);wireCall(cl);}
     });
@@ -102,11 +103,110 @@ const NET=(function(){
       else if(state!=='on')cleanup('配對服務連不上（需要網路）');
     });
   }
+  /* ---------- 手動連線：不經配對服務，連線資訊壓成短碼由玩家自己傳 ---------- */
+  let mpc=null,manual=false;
+  const b64=u8=>btoa(String.fromCharCode.apply(null,u8)).replace(/=+$/,'');
+  const unb64=t=>{const b=atob(t),u=[];for(let i=0;i<b.length;i++)u.push(b.charCodeAt(i));return u;};
+  // SDP → 短碼：只留 ICE 帳密、DTLS 指紋、區網 UDP 位址
+  function packSdp(sdp,kind){
+    const get=re=>{const m=re.exec(sdp);return m?m[1].trim():'';};
+    const uf=get(/a=ice-ufrag:(.+)/),pw=get(/a=ice-pwd:(.+)/),fp=get(/a=fingerprint:sha-256 (.+)/i),su=get(/a=setup:(.+)/);
+    if(!uf||!pw||!fp)return null;
+    const fpb=b64(fp.split(':').map(h=>parseInt(h,16)));
+    const cs=[],seen={};
+    sdp.split(/\r?\n/).forEach(l=>{
+      const m=/^a=candidate:\S+ 1 udp \d+ (\S+) (\d+) typ host/i.exec(l);
+      if(!m||m[1].indexOf(':')>=0)return;
+      const k=m[1].replace(/\.local$/,'')+':'+m[2];
+      if(!seen[k]&&cs.length<4){seen[k]=1;cs.push(k);}
+    });
+    if(!cs.length)return null;
+    return 'HP'+kind+'~'+uf+'~'+pw+'~'+fpb+'~'+(su==='passive'?'p':su==='active'?'a':'x')+'~'+cs.join(',');
+  }
+  function unpackSdp(code){
+    const t=(''+code).replace(/\s+/g,'').split('~');
+    if(t.length<6||!/^HP[OA]$/.test(t[0]))return null;
+    let fp;try{fp=unb64(t[3]).map(v=>('0'+v.toString(16)).slice(-2).toUpperCase()).join(':');}catch(e){return null;}
+    if(fp.length!==95)return null;
+    const setup=t[4]==='p'?'passive':t[4]==='a'?'active':'actpass';
+    let c='';
+    t[5].split(',').forEach((k,i)=>{
+      const j=k.lastIndexOf(':');if(j<1)return;
+      let ad=k.slice(0,j);const po=k.slice(j+1);
+      if(!/^\d+\.\d+\.\d+\.\d+$/.test(ad))ad+='.local';
+      c+='a=candidate:'+(i+1)+' 1 udp '+(2122260223-i)+' '+ad+' '+po+' typ host generation 0\r\n';
+    });
+    const sdp='v=0\r\no=- 4611731400430051336 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=group:BUNDLE 0\r\na=msid-semantic: WMS\r\n'+
+      'm=application 9 UDP/DTLS/SCTP webrtc-datachannel\r\nc=IN IP4 0.0.0.0\r\n'+c+
+      'a=ice-ufrag:'+t[1]+'\r\na=ice-pwd:'+t[2]+'\r\na=ice-options:trickle\r\na=fingerprint:sha-256 '+fp+'\r\na=setup:'+setup+'\r\na=mid:0\r\na=sctp-port:5000\r\na=max-message-size:262144\r\n';
+    return {type:t[0]==='HPO'?'offer':'answer',sdp};
+  }
+  function gathered(pc){
+    return new Promise(res=>{
+      if(pc.iceGatheringState==='complete')return res();
+      const to=setTimeout(res,3500);
+      pc.addEventListener('icegatheringstatechange',()=>{if(pc.iceGatheringState==='complete'){clearTimeout(to);res();}});
+    });
+  }
+  // 把 RTCDataChannel 包成跟 PeerJS 連線一樣的介面（open/send/close）
+  function wrapDc(dc,main){
+    const w={open:false,peer:'manual',send:o=>dc.send(JSON.stringify(o)),close:()=>{try{dc.close();}catch(e){}}};
+    dc.onopen=()=>{w.open=true;if(main){conn=w;setState('on');}else fast=w;};
+    dc.onmessage=ev=>{let d;try{d=JSON.parse(ev.data);}catch(e){return;}if(L.onData)try{L.onData(d);}catch(e){}};
+    dc.onclose=()=>{w.open=false;if(main){if(conn===w&&state==='on')cleanup('對方已離開連線');}else if(fast===w)fast=null;};
+    return w;
+  }
+  function newManualPc(){
+    cleanup();manual=true;
+    const pc=new RTCPeerConnection({iceServers:[]});mpc=pc;
+    pc.onconnectionstatechange=()=>{
+      if(mpc!==pc)return;
+      if(pc.connectionState==='failed')cleanup(state==='on'?'連線中斷':'連不上對方：請確認兩台裝置在同一個 WiFi／區網');
+    };
+    return pc;
+  }
+  // 房主：產生連線碼 → 給對方 → 再輸入對方回傳的回覆碼
+  async function manualHost(){
+    if(typeof RTCPeerConnection==='undefined')throw new Error('此瀏覽器不支援直連');
+    const pc=newManualPc();isHost=true;code='手動';
+    wrapDc(pc.createDataChannel('main',{ordered:true}),true);
+    wrapDc(pc.createDataChannel('fast',{ordered:false,maxRetransmits:0}),false);
+    setState('hosting');
+    await pc.setLocalDescription(await pc.createOffer());
+    await gathered(pc);
+    if(mpc!==pc)throw new Error('已取消');
+    const c=packSdp(pc.localDescription.sdp,'O');
+    if(!c){cleanup('找不到區網位址：這台裝置好像沒有連上 WiFi／區網');throw new Error('no candidate');}
+    return c;
+  }
+  async function manualAccept(ans){
+    const d=unpackSdp(ans);
+    if(!mpc||!d||d.type!=='answer')throw new Error('這不是回覆碼');
+    await mpc.setRemoteDescription(d);
+  }
+  // 加入者：輸入房主的連線碼 → 產生回覆碼給房主
+  async function manualJoin(offer){
+    if(typeof RTCPeerConnection==='undefined')throw new Error('此瀏覽器不支援直連');
+    const d=unpackSdp(offer);
+    if(!d||d.type!=='offer')throw new Error('這不是房主的連線碼');
+    const pc=newManualPc();isHost=false;code='手動';
+    pc.ondatachannel=ev=>{wrapDc(ev.channel,ev.channel.label==='main');};
+    setState('joining','');
+    await pc.setRemoteDescription(d);
+    await pc.setLocalDescription(await pc.createAnswer());
+    await gathered(pc);
+    if(mpc!==pc)throw new Error('已取消');
+    const c=packSdp(pc.localDescription.sdp,'A');
+    if(!c){cleanup('找不到區網位址：這台裝置好像沒有連上 WiFi／區網');throw new Error('no candidate');}
+    return c;
+  }
   function send(o,quick){
     if(quick&&fast&&fast.open){try{fast.send(o);return;}catch(e){}}
     if(conn&&conn.open)try{conn.send(o);}catch(e){}
   }
   function cleanup(msg){
+    if(mpc){const p0=mpc;mpc=null;try{p0.close();}catch(e){}}
+    manual=false;
     try{if(fast)fast.close();}catch(e){}fast=null;
     try{if(conn)conn.close();}catch(e){}
     try{if(call)call.close();}catch(e){}
@@ -145,11 +245,12 @@ const NET=(function(){
     setTimeout(()=>{try{tp.destroy();}catch(e){}},9000);
   }
   async function enableVoice(){
+    if(manual)return false;
     await getMic();
     if(micStream&&peer&&conn&&conn.open){const cl=peer.call(conn.peer,micStream);wireCall(cl);}
     return micOk;
   }
-  return {host,join,send,leave:()=>cleanup('已離開連線'),toggleMute,enableVoice,probe,
+  return {host,join,send,manualHost,manualAccept,manualJoin,isManual:()=>manual,_pack:packSdp,_unpack:unpackSdp,leave:()=>cleanup('已離開連線'),toggleMute,enableVoice,probe,
     state:()=>state,fast:()=>!!(fast&&fast.open),code:()=>code,isHost:()=>isHost,muted:()=>muted,micOk:()=>micOk,
     on:(k,f)=>{L[k]=f;}};
 })();

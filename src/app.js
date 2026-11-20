@@ -2808,6 +2808,7 @@ function addRecent(c){try{let r=recentRooms().filter(x=>x!==c);r.unshift(c);r=r.
 let netWasOn=false;
 NET.on('onState',(s,msg)=>{
   const prevOn=netWasOn;netWasOn=(s==='on');
+  if(s==='on'||(s==='off'&&mstep!=='joinIn')){mstep=null;mcode='';if(scanStop)scanStop();}
   netUI();updVoiceBtn();updNetBtn();updNetBadge();
   if(msg)toast(msg);
   if(s==='on'){
@@ -2818,7 +2819,7 @@ NET.on('onState',(s,msg)=>{
     if(/elemfire/.test(location.hash))F.elem={type:'fire',t:600};
     skillHud();hud();save();
     if(NET.state()==='on')NET.send({t:'sk',sk:F.sk});
-    if(!NET.isHost())addRecent(NET.code());
+    if(!NET.isHost()&&!NET.isManual())addRecent(NET.code());
     toast('🤝 連線成功！共鬥從第 1 波全新開始');SND.sparkle();netSendHello();
   }
   if(s==='off'&&prevOn&&!NET.isHost()){
@@ -3198,10 +3199,93 @@ function seaTick(dt,t){
     SHARK.g.position.set(SHARK.x,-0.08+Math.sin(t*2.6)*0.03,SHARK.z);
   }
 }
+/* ----- 手動連線（免網路）：QR / 複製貼上交換連線碼 ----- */
+let mstep=null,mcode='';
+function qrDraw(cv,text){
+  try{
+    const q=qrcode(0,'L');q.addData(text);q.make();
+    const n=q.getModuleCount(),qz=3,sc=Math.max(2,Math.floor(cv.width/(n+qz*2))),off=Math.floor((cv.width-n*sc)/2),g=cv.getContext('2d');
+    g.fillStyle='#fff';g.fillRect(0,0,cv.width,cv.height);g.fillStyle='#2a2224';
+    for(let r=0;r<n;r++)for(let c=0;c<n;c++)if(q.isDark(r,c))g.fillRect(off+c*sc,off+r*sc,sc,sc);
+    return true;
+  }catch(e){return false;}
+}
+function copyText(t,okMsg){
+  const fb=()=>{try{const ta=document.createElement('textarea');ta.value=t;ta.style.cssText='position:fixed;left:-999px;top:0';document.body.appendChild(ta);ta.select();const ok=document.execCommand('copy');ta.remove();toast(ok?okMsg:'複製失敗，請手動選取');}catch(e){toast('複製失敗，請手動選取');}};
+  try{if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(()=>toast(okMsg),fb);else fb();}catch(e){fb();}
+}
+let scanStop=null;
+function qrScan(cb){
+  if(scanStop)scanStop();
+  const ov=$('#scanov'),v=$('#scanv');
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia){toast('這個瀏覽器開不了相機，請改用複製貼上');return;}
+  let stream=null,timer=null,busy=false,done=false;
+  const cv=document.createElement('canvas'),g=cv.getContext('2d',{willReadFrequently:true});
+  let det=null;try{if('BarcodeDetector' in window)det=new BarcodeDetector({formats:['qr_code']});}catch(e){det=null;}
+  const stop=()=>{done=true;clearInterval(timer);if(stream)stream.getTracks().forEach(t=>t.stop());v.srcObject=null;ov.classList.remove('show');scanStop=null;};
+  scanStop=stop;
+  const hit=txt=>{if(done||!txt)return;txt=(''+txt).trim();if(!/^HP[OA]~/.test(txt)){$('#scanmsg').textContent='這不是歡樂派對的連線 QR';return;}stop();SND.sparkle();cb(txt);};
+  ov.classList.add('show');$('#scanmsg').textContent='把對方螢幕上的 QR 放進框框裡';
+  navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}},audio:false}).then(st=>{
+    if(done){st.getTracks().forEach(t=>t.stop());return;}
+    stream=st;v.srcObject=st;v.setAttribute('playsinline','');const pp=v.play();if(pp&&pp.catch)pp.catch(()=>{});
+    timer=setInterval(()=>{
+      if(busy||done||!v.videoWidth)return;
+      const k=Math.min(1,720/Math.max(v.videoWidth,v.videoHeight));cv.width=Math.round(v.videoWidth*k);cv.height=Math.round(v.videoHeight*k);
+      g.drawImage(v,0,0,cv.width,cv.height);
+      if(det){busy=true;det.detect(cv).then(r=>{busy=false;if(r&&r[0])hit(r[0].rawValue);else jsq();},()=>{busy=false;det=null;});}
+      else jsq();
+    },160);
+    function jsq(){
+      if(typeof jsQR==='undefined'||done)return;
+      try{const im=g.getImageData(0,0,cv.width,cv.height),r=jsQR(im.data,im.width,im.height,{inversionAttempts:'dontInvert'});if(r&&r.data)hit(r.data);}catch(e){}
+    }
+  },()=>{stop();toast('📷 相機權限沒開，請改用複製貼上');});
+}
+function manualPanel(body,mk){
+  const st=NET.state();
+  const wrap=document.createElement('div');wrap.className='mwrap';body.appendChild(wrap);
+  const col=()=>{const d=document.createElement('div');d.className='mcol';wrap.appendChild(d);return d;};
+  const txt=(par,h)=>{const p=document.createElement('p');p.innerHTML=h;par.appendChild(p);return p;};
+  const showCode=(par,code,label)=>{
+    const cv=document.createElement('canvas');cv.width=cv.height=264;cv.className='mqr';par.appendChild(cv);qrDraw(cv,code);
+    par.appendChild(mk('📋 複製'+label,'nblue',()=>{SND.click();copyText(code,'📋 已複製'+label);}));
+  };
+  const inputCode=(par,ph,fn)=>{
+    par.appendChild(mk('📷 掃描 QR','ngreen',()=>{SND.click();qrScan(fn);}));
+    const row=document.createElement('div');row.className='nrow';
+    const inp=document.createElement('input');inp.className='mcin';inp.placeholder=ph;inp.autocapitalize='off';inp.autocomplete='off';inp.spellcheck=false;
+    row.appendChild(inp);row.appendChild(mk('確定','nblue',()=>{SND.click();if(inp.value.trim())fn(inp.value.trim());}));
+    par.appendChild(row);
+  };
+  const cancel=()=>body.appendChild(mk('❌ 取消','nred',()=>{mstep=null;mcode='';NET.leave();netUI();}));
+  if(mstep==='host'){
+    if(!mcode){txt(wrap,'⏳ 正在準備連線碼…');cancel();return;}
+    const a=col(),b=col();
+    txt(a,'<b>① 讓對方掃這個 QR</b><br><small>或複製連線碼傳給他</small>');showCode(a,mcode,'連線碼');
+    txt(b,'<b>② 再掃對方畫面上的回覆 QR</b><br><small>或貼上他傳回來的回覆碼</small>');
+    inputCode(b,'貼上回覆碼',c=>{NET.manualAccept(c).then(()=>{toast('🔗 連線中…');},()=>toast('⚠ 這不是對方的回覆碼，請再試一次'));});
+    cancel();
+  }else if(mstep==='joinIn'){
+    const a=col();
+    txt(a,'<b>① 掃房主畫面上的 QR</b><br><small>或貼上房主傳來的連線碼</small>');
+    inputCode(a,'貼上連線碼',c=>{
+      NET.manualJoin(c).then(ans=>{mcode=ans;mstep='joinOut';netUI();},e=>{if(NET.state()!=='off'){mstep='joinIn';NET.leave();}mstep='joinIn';toast('⚠ 這不是房主的連線碼，請再試一次');netUI();});
+    });
+    cancel();
+  }else if(mstep==='joinOut'){
+    const a=col();
+    txt(a,'<b>② 讓房主掃這個回覆 QR</b><br><small>或複製回覆碼傳給房主，他輸入後就會連上</small>');showCode(a,mcode,'回覆碼');
+    txt(a,'⏳ 等房主輸入…');
+    cancel();
+  }
+}
 function netUI(){
   const body=$('#netbody');if(!body)return;
   const s=NET.state();body.innerHTML='';
   const mk=(txt,cls,fn)=>{const b2=document.createElement('button');b2.className=cls;b2.textContent=txt;b2.onclick=fn;return b2;};
+  if(s==='on')mstep=null;
+  if(mstep&&s!=='on'){manualPanel(body,mk);return;}
   if(s==='off'){
     const p=document.createElement('p');p.innerHTML='兩台裝置都開著遊戲（需網路）。<br>一人建立房間拿到 <b>5 字房號</b>，另一人輸入房號就能一起玩、開語音！';
     body.appendChild(p);
@@ -3220,6 +3304,11 @@ function netUI(){
       body.appendChild(row2);
       NET.probe(rr,(cd,ok)=>{const b3=bts[cd];if(b3){b3.textContent=(ok?'🟢':'⚪')+cd;if(ok){b3.style.borderColor='#3fae6a';b3.style.boxShadow='0 0 10px rgba(63,174,106,.6)';}else b3.style.opacity=0.6;}});
     }
+    {const lab=document.createElement('p');lab.className='msep';lab.innerHTML='<b>📴 沒有網路？</b> 同一個 WiFi／區網可以手動連線（互掃 QR 或複製貼上，無語音）';body.appendChild(lab);
+     const row3=document.createElement('div');row3.className='nrow';
+     row3.appendChild(mk('🏠 手動開房','ngray',()=>{SND.click();mstep='host';mcode='';netUI();NET.manualHost().then(c=>{mcode=c;netUI();},e=>{mstep=null;toast('⚠ 無法開房：'+((e&&e.message)||''));netUI();});}));
+     row3.appendChild(mk('🚪 手動加入','ngray',()=>{SND.click();mstep='joinIn';mcode='';netUI();}));
+     body.appendChild(row3);}
   }else if(s==='wait'||s==='joining'){
     const p=document.createElement('p');p.textContent=s==='wait'?'正在連上配對服務…':'正在連到房主…';body.appendChild(p);
     body.appendChild(mk('❌ 取消','ngray',()=>{NET.leave();netUI();}));
@@ -3229,9 +3318,10 @@ function netUI(){
     const p=document.createElement('p');p.innerHTML='把房號告訴朋友，等他加入…<br><small>第一次會詢問麥克風權限（語音用，可拒絕）</small>';body.appendChild(p);
     body.appendChild(mk('❌ 取消','nred',()=>{NET.leave();netUI();}));
   }else if(s==='on'){
-    const p=document.createElement('p');p.innerHTML='✅ 已連線'+(RP.on?('：<b>'+RP.name+'</b> 同行中'):'')+'<br>'+(NET.micOk()?'🔊 語音開啟中':'🎙 語音未啟用');body.appendChild(p);
+    const p=document.createElement('p');p.innerHTML='✅ 已連線'+(RP.on?('：<b>'+RP.name+'</b> 同行中'):'')+'<br>'+(NET.isManual()?'📴 手動直連（無語音）':(NET.micOk()?'🔊 語音開啟中':'🎙 語音未啟用'));body.appendChild(p);
     const row=document.createElement('div');row.className='nrow';
-    if(NET.micOk())row.appendChild(mk(NET.muted()?'🎙 取消靜音':'🔇 靜音','nblue',function(){const m=NET.toggleMute();this.textContent=m?'🎙 取消靜音':'🔇 靜音';updVoiceBtn();}));
+    if(NET.isManual()){}
+    else if(NET.micOk())row.appendChild(mk(NET.muted()?'🎙 取消靜音':'🔇 靜音','nblue',function(){const m=NET.toggleMute();this.textContent=m?'🎙 取消靜音':'🔇 靜音';updVoiceBtn();}));
     else row.appendChild(mk('🎙 開啟語音','ngreen',function(){this.textContent='🎙 詢問權限中…';NET.enableVoice().then(ok=>{toast(ok?'🔊 語音已開啟！':'🎙 麥克風權限被拒，語音無法使用');netUI();updVoiceBtn();});}));
     row.appendChild(mk('❌ 離開連線','nred',()=>{NET.leave();netUI();}));
     body.appendChild(row);
@@ -3245,15 +3335,17 @@ function copyCode(){
 function updNetBadge(){
   const b=$('#netbadge');if(!b)return;
   const s=NET.state();
-  if(s==='hosting'){b.style.display='';b.textContent='🏠 房號 '+NET.code()+'　等待夥伴加入…　點我複製';}
+  if(NET.isManual()&&(s==='hosting'||s==='joining')){b.style.display='';b.textContent='📴 手動連線中…　點我繼續';}
+  else if(s==='hosting'){b.style.display='';b.textContent='🏠 房號 '+NET.code()+'　等待夥伴加入…　點我複製';}
   else if(s==='wait'){b.style.display='';b.textContent='⏳ 正在連接配對服務…';}
   else if(s==='joining'){b.style.display='';b.textContent='🚪 正在加入 '+NET.code()+'…';}
   else b.style.display='none';
 }
-$('#netbadge').onclick=()=>{SND.click();copyCode();};
+$('#scanx').onclick=()=>{if(scanStop)scanStop();};
+$('#netbadge').onclick=()=>{SND.click();if(NET.isManual())openNet();else copyCode();};
 function updVoiceBtn(){
   const b=$('#bVoice');if(!b)return;
-  if(NET.state()!=='on'){b.style.display='none';return;}
+  if(NET.state()!=='on'||NET.isManual()){b.style.display='none';return;}
   b.style.display='';b.textContent=NET.micOk()?(NET.muted()?'🔇':'🎙'):'🎙';b.style.opacity=NET.micOk()?1:0.5;
 }
 function updNetBtn(){

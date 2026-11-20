@@ -13,6 +13,18 @@ const OUTLINE=new THREE.ShaderMaterial({side:THREE.BackSide,
   vertexShader:'void main(){vec3 p=position+normal*0.0085;gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);}',
   fragmentShader:'void main(){gl_FragColor=vec4(0.45,0.29,0.27,1.0);}'});
 OUTLINE.userData.shared=1;
+const OUTLINE_ON=false;
+/* 麻糬頭型：臉頰處微微鼓出、下巴收圓、頭頂略平；頭、臉部貼圖共用同一個變形 */
+function headShape(geo){
+  const p=geo.attributes.position;
+  for(let i=0;i<p.count;i++){
+    const x=p.getX(i),y=p.getY(i),z=p.getZ(i),r=Math.hypot(x,y,z)||1,ny=y/r;
+    const ck=1+0.055*Math.exp(-Math.pow((ny+0.34)/0.36,2));
+    const top=ny>0.55?1-0.05*(ny-0.55)/0.45:1,chin=ny<-0.7?1-0.07*(-0.7-ny)/0.3:1;
+    p.setXYZ(i,x*ck,y*top*chin,z*(1+(ck-1)*0.55));
+  }
+  p.needsUpdate=true;geo.computeVertexNormals();return geo;
+}
 /* 邊緣光：輪廓處補一圈暖白，角色從背景浮出來（只加在有描邊的角色/魔王/貓） */
 function RIMFN(sh){
   sh.fragmentShader=sh.fragmentShader.replace('#include <output_fragment>',
@@ -23,6 +35,7 @@ function addOutlines(root){
   const list=[];
   root.traverse(o=>{if(o.isMesh&&!o.userData.ol&&o.material&&!o.material.transparent)addRim(o.material);});
   root.traverse(o=>{if(o.isMesh&&o.type==='Mesh'&&!o.userData.ol&&!o.userData.hasOl&&o.material&&!o.material.transparent)list.push(o);});
+  if(!OUTLINE_ON)return;
   for(const o of list){const m=new THREE.Mesh(o.geometry,OUTLINE);m.userData.ol=1;o.userData.hasOl=1;o.add(m);}
 }
 const SPH=(r,ws,hs)=>new THREE.SphereGeometry(r,ws||16,hs||12);
@@ -139,7 +152,7 @@ class Character{
     this.hairHi=M('#ffffff',{side:2,transparent:true,opacity:0.22,depthWrite:false});this.hairHi.userData.shared=1;
     this.hairMatV=M('#4a2c1c',{side:2,vertexColors:true});this.hairMatV.userData.shared=1;
     this.body=new THREE.Group();this.root.add(this.body);
-    this.lower=new THREE.Group();this.lower.scale.setScalar(1.22);this.body.add(this.lower);
+    this.lower=new THREE.Group();this.lower.scale.setScalar(1.15);this.body.add(this.lower);
     this.torsoG=new THREE.Group();this.torsoG.scale.set(1.05,1,0.95);this.lower.add(this.torsoG);
     this.torsoSkin=new THREE.Mesh(torsoBand(TY0,TY1,0),this.skinMat);this.torsoG.add(this.torsoSkin);
     this.topG=new THREE.Group();this.botG=new THREE.Group();this.torsoG.add(this.topG,this.botG);
@@ -158,11 +171,11 @@ class Character{
     // 頭
     this.headPos=new THREE.Group();this.headPos.position.set(0,1.38,0);this.body.add(this.headPos);
     this.headS=new THREE.Group();this.headPos.add(this.headS);
-    this.headS.add(new THREE.Mesh(SPH(0.5,32,24),this.skinMat));
+    this.headS.add(new THREE.Mesh(headShape(SPH(0.5,40,30)),this.skinMat));
     for(const s of[-1,1]){const e=new THREE.Mesh(SPH(0.09,12,10),this.skinMat);e.position.set(s*0.49,-0.03,0);e.scale.set(0.5,1,0.7);this.headS.add(e);}
     this.faceCv=document.createElement('canvas');this.faceCv.width=FW;this.faceCv.height=FH;
     this.faceTex=new THREE.CanvasTexture(this.faceCv);
-    const dg=new THREE.SphereGeometry(0.503,48,32,PI/2-FPH/2,FPH,FTH0,FH/FS);
+    const dg=headShape(new THREE.SphereGeometry(0.503,48,32,PI/2-FPH/2,FPH,FTH0,FH/FS));
     const dm=new THREE.MeshLambertMaterial({map:this.faceTex,transparent:true,depthWrite:false,polygonOffset:true,polygonOffsetFactor:-2,polygonOffsetUnits:-2});
     dm.userData.shared=1;this.headS.add(new THREE.Mesh(dg,dm));
     this.hairG=new THREE.Group();this.hatG=new THREE.Group();this.faceG=new THREE.Group();
@@ -191,9 +204,9 @@ class Character{
   applyBody(){
     const c=this.cfg,F=FACES[c.face],g=k=>c[k]===undefined?1:c[k];
     this.skinMat.color.set(SKIN[c.skin]);
-    const hs=g('headSize'),sxh=F.sx*1.08*g('faceW')*hs,syh=F.sy*0.95*g('faceH')*hs;
+    const hs=g('headSize'),sxh=(1+(F.sx-1)*0.6)*0.985*g('faceW')*hs,syh=(1+(F.sy-1)*0.6)*1.0*g('faceH')*hs;
     this.headS.scale.set(sxh,syh,hs);
-    const H=g('height'),L=g('legs'),s=1.22*H,lift=0.42*s*(L-1);
+    const H=g('height'),L=g('legs'),s=1.15*H,lift=0.42*s*(L-1);
     this.lower.scale.setScalar(s);this.lower.position.y=lift;
     this.legs.forEach((l,i)=>{l.scale.y=L;this.shoeG[i].scale.y=1/L;this.shoeG[i].position.y=0.42*(1-L)/L;});
     const sx=(c.sex==='f'?1.02:1.12)/Math.pow(H,0.5);this.torsoG.scale.x=sx;

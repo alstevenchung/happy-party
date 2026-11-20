@@ -163,6 +163,19 @@ body.fight #bUser{display:none!important}
 #netbody .ngray{background:#9aa0a6}
 #netbody .nstat{font-weight:800;color:#5a4244}
 #netbody .nrecent{background:#fff;color:#5a4244;border:3px solid #f4a6c0;letter-spacing:4px;font-size:19px}
+.mwrap{display:flex;flex-wrap:wrap;gap:14px;justify-content:center;align-items:flex-start;width:100%}
+.mcol{display:flex;flex-direction:column;align-items:center;gap:8px;flex:1 1 200px;max-width:270px}
+.mqr{width:min(200px,44vh);height:min(200px,44vh);border-radius:14px;border:4px solid #fff;box-shadow:0 4px 0 rgba(0,0,0,.12);image-rendering:pixelated;background:#fff}
+#netbody input.mcin{width:150px;height:46px;font-size:13px;letter-spacing:0;text-transform:none;text-align:left;padding:0 10px}
+#netbody .msep{border-top:2px dashed #f0d7c3;padding-top:10px;width:100%;font-size:13px}
+#netbody .mwrap button{height:44px;font-size:15px;padding:0 16px}
+.nbox{width:min(600px,94vw)!important}
+#scanov{position:fixed;inset:0;z-index:40;background:#000;display:none;align-items:center;justify-content:center}
+#scanov.show{display:flex}
+#scanv{width:100%;height:100%;object-fit:cover}
+.scanbox{position:absolute;left:50%;top:50%;width:min(62vw,62vh);height:min(62vw,62vh);transform:translate(-50%,-50%);border:4px solid #fff;border-radius:22px;box-shadow:0 0 0 2000px rgba(0,0,0,.45)}
+#scanmsg{position:absolute;left:0;right:0;top:calc(14px + env(safe-area-inset-top,0px));text-align:center;color:#fff;font-weight:800;font-size:16px;text-shadow:0 2px 4px rgba(0,0,0,.7)}
+#scanx{position:absolute;left:50%;bottom:calc(18px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);height:48px;padding:0 24px;border:0;border-radius:24px;background:#fff;font-size:16px;font-weight:800}
 #bNet.hosting{background:#ffe9a8;animation:glow .5s infinite alternate}
 #bNet.non{background:#9bf0b0}
 @media (max-width:560px) and (orientation:portrait){
@@ -393,6 +406,7 @@ body[data-mode=create] #joy{display:none}
 <div id="pauseov"></div>
 <div id="netbadge" style="display:none"></div>
 <div id="coHud"><canvas id="coAva" width="64" height="64"></canvas><div class="coinfo"><div><span id="coName"></span><span id="coPing"></span></div><div id="coHp"><i></i></div></div></div>
+<div id="scanov"><video id="scanv" muted playsinline></video><div class="scanbox"></div><div id="scanmsg"></div><button id="scanx">✕ 取消掃描</button></div>
 <div id="netov"><div class="pbox nbox"><h2>🌐 連線同玩</h2><div id="netbody"></div><div class="pbtns"><button id="nClose">關閉視窗</button></div></div></div>
 <div id="killc"><small>擊殺數</small><b id="kcount">0</b></div>
 <div id="banner"></div><div id="icefx"></div><div id="firefx"></div><div id="thunderfx"></div><div id="zonefx"></div><div id="hurtfx"></div><div id="koov"></div>
@@ -415,8 +429,11 @@ body[data-mode=create] #joy{display:none}
   <div id="slots"></div>
   <div class="thint">進度會自動記在這台裝置的瀏覽器裡</div>
 </div>
+<script>try{if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='localhost'))navigator.serviceWorker.register('sw.js').catch(function(){});}catch(e){}</script>
 <script>/*THREE*/</script>
 <script>/*PEER*/</script>
+<script>/*QRGEN*/</script>
+<script>/*JSQR*/</script>
 <script>/*APP*/</script>
 </body>
 </html>
