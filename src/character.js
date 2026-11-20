@@ -3,14 +3,15 @@
 const PI=Math.PI;
 const V=(x,y,z)=>new THREE.Vector3(x,y,z);
 /* 三階賽璐璐上色：亮面/中間調/暗面，卡通感的關鍵 */
-const TOONGRAD=(()=>{const d=new Uint8Array([138,138,138,255, 204,204,204,255, 252,252,252,255]);
-  const t=new THREE.DataTexture(d,3,1,THREE.RGBAFormat);t.minFilter=t.magFilter=THREE.NearestFilter;t.needsUpdate=true;return t;})();
+const TOONGRAD=(()=>{const v=[172,176,190,214,236,248,253,255],d=new Uint8Array(v.length*4);
+  v.forEach((x,i)=>{d[i*4]=x;d[i*4+1]=Math.round(x*0.985);d[i*4+2]=Math.round(x*0.97);d[i*4+3]=255;});
+  const t=new THREE.DataTexture(d,v.length,1,THREE.RGBAFormat);t.minFilter=t.magFilter=THREE.LinearFilter;t.needsUpdate=true;return t;})();
 function LAMB(opt){return new THREE.MeshToonMaterial(Object.assign({gradientMap:TOONGRAD},opt));}
 const M=(c,o)=>LAMB(Object.assign({color:c},o||{}));
 /* 卡通描邊：沿法線外推的反向殼，深可可色 */
 const OUTLINE=new THREE.ShaderMaterial({side:THREE.BackSide,
-  vertexShader:'void main(){vec3 p=position+normal*0.014;gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);}',
-  fragmentShader:'void main(){gl_FragColor=vec4(0.30,0.20,0.22,1.0);}'});
+  vertexShader:'void main(){vec3 p=position+normal*0.0085;gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);}',
+  fragmentShader:'void main(){gl_FragColor=vec4(0.45,0.29,0.27,1.0);}'});
 OUTLINE.userData.shared=1;
 /* 邊緣光：輪廓處補一圈暖白，角色從背景浮出來（只加在有描邊的角色/魔王/貓） */
 function RIMFN(sh){
@@ -97,9 +98,9 @@ function hairShell(R,hl,flare){
       const v=j/M,th=v*e;
       let r=R*(1+0.04*Math.sin(v*PI)+0.025*Math.pow(v,4))*flare(th,a);
       const p=surf(r,th,a);pos.push(p.x,p.y,p.z);
-      const strand=0.5+0.5*Math.sin(a*46+th*7);
-      const sheen=Math.exp(-Math.pow((th-0.6)/0.2,2))*Math.max(0,Math.cos(a))*0.14;
-      const f=Math.min(1,0.76+0.12*strand+sheen*1.3+0.05*(1-v));
+      const strand=0.5+0.5*Math.sin(a*24+th*3);
+      const sheen=Math.exp(-Math.pow((th-0.62)/0.17,2))*(0.55+0.45*Math.max(0,Math.cos(a-0.5)))*0.2;
+      const f=Math.min(1,0.8+0.045*strand+sheen+0.04*(1-v));
       col.push(f,f,f);
     }
   }
@@ -147,7 +148,7 @@ class Character{
     for(let i=0;i<2;i++){
       const a=new THREE.Group();a.position.set((i?1:-1)*0.27,0.68,0);
       const am=new THREE.Mesh(capA,this.skinMat);a.add(am);
-      const hd=new THREE.Mesh(SPH(0.092,16,14),this.skinMat);hd.position.y=-0.36;hd.scale.set(1,1.1,0.88);(this.hands=this.hands||[]).push(hd);a.add(hd);
+      const hd=new THREE.Mesh(SPH(0.08,16,14),this.skinMat);hd.position.y=-0.355;hd.scale.set(1,1.1,0.88);(this.hands=this.hands||[]).push(hd);a.add(hd);
       const sg=new THREE.Group();a.add(sg);this.sleeveG.push(sg);this.lower.add(a);this.arms.push(a);
       const l=new THREE.Group();l.position.set((i?1:-1)*0.11,0.42,0);
       const lm=new THREE.Mesh(capL,this.skinMat);l.add(lm);
@@ -196,7 +197,7 @@ class Character{
     this.lower.scale.setScalar(s);this.lower.position.y=lift;
     this.legs.forEach((l,i)=>{l.scale.y=L;this.shoeG[i].scale.y=1/L;this.shoeG[i].position.y=0.42*(1-L)/L;});
     const sx=(c.sex==='f'?1.02:1.12)/Math.pow(H,0.5);this.torsoG.scale.x=sx;
-    const ax=sx*0.16+0.07+(g('chest')-1)*0.05;
+    const ax=sx*0.16+0.052+(g('chest')-1)*0.05;
     this.arms[0].position.x=-ax;this.arms[1].position.x=ax;
     this.torsoSkin.geometry.dispose();this.torsoSkin.geometry=torsoBand(TY0,TY1,0);this.torsoSkin.children.forEach(ch=>{if(ch.userData.ol)ch.geometry=this.torsoSkin.geometry;});
     this.headPos.position.y=0.79*s+lift+0.5*syh-0.06;
@@ -530,7 +531,7 @@ class Character{
     const sw=Math.sin(this.phase)*(0.8+0.45*(this.runK||0))*mv;
     this.legs[0].rotation.x=sw;this.legs[1].rotation.x=-sw;
     this.arms[0].rotation.x=-sw*0.8;this.arms[1].rotation.x=sw*0.8;
-    this.arms[0].rotation.z=-0.2-Math.sin(t*2)*0.01;this.arms[1].rotation.z=0.2+Math.sin(t*2)*0.01;
+    this.arms[0].rotation.z=-0.17-Math.sin(t*2)*0.025;this.arms[1].rotation.z=0.17+Math.sin(t*2)*0.025;
     let by=Math.abs(Math.sin(this.phase))*0.05*mv*(1+1.4*(this.runK||0)),bz=0,hz=0,lean=0.24*(this.runK||0)*mv,twist=0;
     if(emote==='wave'){this.arms[1].rotation.x=0;this.arms[1].rotation.z=2.5+Math.sin(et*12)*0.3;hz=0.05;}
     else if(emote==='dance'){
