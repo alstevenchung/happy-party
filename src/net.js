@@ -1,7 +1,7 @@
 'use strict';
 /* ===== 連線同玩：WebRTC P2P（資料+語音），房號制訊號交換 ===== */
 const NET=(function(){
-  let peer=null,conn=null,call=null,micStream=null,remoteAudio=null;
+  let peer=null,conn=null,fast=null,call=null,micStream=null,remoteAudio=null;
   let state='off',code='',isHost=false,muted=false,micOk=false;
   const L={onState:null,onData:null};
   const CH='ABCDEFGHJKMNPQRSTUVWXYZ23456789';
@@ -33,6 +33,15 @@ const NET=(function(){
     conn=c;
     c.on('open',async()=>{
       setState('on');
+      try{
+        if(!isHost&&peer){
+          const f=peer.connect(c.peer,{reliable:false,label:'fast',serialization:'json'});
+          f.on('open',()=>{fast=f;});
+          f.on('data',d=>{if(L.onData)try{L.onData(d);}catch(e){}});
+          f.on('close',()=>{if(fast===f)fast=null;});
+          f.on('error',()=>{if(fast===f)fast=null;});
+        }
+      }catch(e){}
       await getMic();
       if(!isHost&&micStream&&peer){const cl=peer.call(c.peer,micStream);wireCall(cl);}
     });
@@ -47,6 +56,13 @@ const NET=(function(){
     peer=newPeer('hp2'+code);
     peer.on('open',()=>{setState('hosting');getMic();});
     peer.on('connection',c=>{
+      if(c.label==='fast'){
+        c.on('open',()=>{if(conn&&c.peer===conn.peer)fast=c;});
+        c.on('data',d=>{if(conn&&c.peer===conn.peer){fast=c;if(L.onData)try{L.onData(d);}catch(e){}}});
+        c.on('close',()=>{if(fast===c)fast=null;});
+        c.on('error',()=>{if(fast===c)fast=null;});
+        return;
+      }
       let role=null;
       c.on('data',d=>{
         if(role==='probe')return;
@@ -86,8 +102,12 @@ const NET=(function(){
       else if(state!=='on')cleanup('配對服務連不上（需要網路）');
     });
   }
-  function send(o){if(conn&&conn.open)try{conn.send(o);}catch(e){}}
+  function send(o,quick){
+    if(quick&&fast&&fast.open){try{fast.send(o);return;}catch(e){}}
+    if(conn&&conn.open)try{conn.send(o);}catch(e){}
+  }
   function cleanup(msg){
+    try{if(fast)fast.close();}catch(e){}fast=null;
     try{if(conn)conn.close();}catch(e){}
     try{if(call)call.close();}catch(e){}
     try{if(peer)peer.destroy();}catch(e){}
@@ -130,6 +150,6 @@ const NET=(function(){
     return micOk;
   }
   return {host,join,send,leave:()=>cleanup('已離開連線'),toggleMute,enableVoice,probe,
-    state:()=>state,code:()=>code,isHost:()=>isHost,muted:()=>muted,micOk:()=>micOk,
+    state:()=>state,fast:()=>!!(fast&&fast.open),code:()=>code,isHost:()=>isHost,muted:()=>muted,micOk:()=>micOk,
     on:(k,f)=>{L[k]=f;}};
 })();

@@ -12,8 +12,15 @@ const OUTLINE=new THREE.ShaderMaterial({side:THREE.BackSide,
   vertexShader:'void main(){vec3 p=position+normal*0.014;gl_Position=projectionMatrix*modelViewMatrix*vec4(p,1.);}',
   fragmentShader:'void main(){gl_FragColor=vec4(0.30,0.20,0.22,1.0);}'});
 OUTLINE.userData.shared=1;
+/* 邊緣光：輪廓處補一圈暖白，角色從背景浮出來（只加在有描邊的角色/魔王/貓） */
+function RIMFN(sh){
+  sh.fragmentShader=sh.fragmentShader.replace('#include <output_fragment>',
+    'float rimK=pow(1.0-clamp(dot(normalize(normal),normalize(vViewPosition)),0.0,1.0),2.6);\noutgoingLight+=vec3(1.0,0.95,0.86)*rimK*0.26;\n#include <output_fragment>');
+}
+function addRim(m){if(m&&m.isMeshToonMaterial&&!m.userData.rim){m.userData.rim=1;m.onBeforeCompile=RIMFN;m.needsUpdate=true;}}
 function addOutlines(root){
   const list=[];
+  root.traverse(o=>{if(o.isMesh&&!o.userData.ol&&o.material&&!o.material.transparent)addRim(o.material);});
   root.traverse(o=>{if(o.isMesh&&o.type==='Mesh'&&!o.userData.ol&&!o.userData.hasOl&&o.material&&!o.material.transparent)list.push(o);});
   for(const o of list){const m=new THREE.Mesh(o.geometry,OUTLINE);m.userData.ol=1;o.userData.hasOl=1;o.add(m);}
 }
