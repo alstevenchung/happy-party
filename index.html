@@ -14600,6 +14600,7 @@ const NET=(function(){
   let peer=null,conn=null,fast=null,micStream=null;
   let state='off',code='',isHost=false,muted=false,micOk=false,myId=0,manual=false;
   const MAXC=3;
+  const RELSTALL=+(((/[#&]relstall=(\d+)/.exec(location.hash)||[])[1])||0);
   const links=new Map();let nextPid=1;
   const calls=[],audios=[];
   const L={onState:null,onData:null,onPeer:null,info:null};
@@ -14938,6 +14939,7 @@ const NET=(function(){
   function send(o,quick){
     if(isHost){for(const lk of links.values())put(lk,o,quick);return;}
     if(quick&&fast&&fast.open){try{fast.send(o);return;}catch(e){}}
+    if(RELSTALL){const c0=conn;setTimeout(()=>{if(c0&&c0.open)try{c0.send(o);}catch(e){}},RELSTALL);return;}   // 測試用：模擬可靠通道被卡住
     if(conn&&conn.open)try{conn.send(o);}catch(e){}
   }
   function sendTo(pid,o,quick){const lk=links.get(pid);if(lk)put(lk,o,quick);}
@@ -16097,10 +16099,16 @@ function resolveHit(){window._rh=(window._rh||0)+1;
   if(hits){F.shake=Math.max(F.shake,A.big?0.3:0.12);F.gauge=Math.min(100,F.gauge+6*hits*(1+0.2*lv('charge')));F.chain+=hits;F.chainT=1.3;SND.hit(A.big||A.crit,A.k);
     if(A.crit){F.zoomK=Math.max(F.zoomK,0.8);F.shake=Math.max(F.shake,0.45);dmgNum(pos.x+fx*1.4,2.3,pos.z+fz*1.4,'爆擊!','#ffd24a');groundRing(pos.x+fx*1.4,pos.z+fz*1.4,0xffd24a,3.2,0.4,0.15);}}
 }
+let dmgSeq=(Math.random()*1e6)|0;
+function sendDmg(o){
+  o.sq=++dmgSeq;
+  if(NET.fast()&&!/nodup/.test(location.hash)){NET.send(o,true);NET.send(o);}else NET.send(o);
+  if(NETDBG)window._dmgSent=(window._dmgSent||0)+1;
+}
 function cDmg(e,dmg,kb,dx,dz,big,k){
   hitFx(e.x,1.3*e.sc,e.z,big,Math.round(dmg),F.elem?ELEMS[F.elem.type].hex:undefined);
   flashChar(e.ch.root,90);e.pop=1;e.ph=0.3;
-  NET.send({t:'dmg',id:e.id,dmg:Math.round(dmg),kb,dx,dz,big:big?1:0,k,el:F.elem?F.elem.type:0,du:lv('dual'),pm:+pmul().toFixed(2)});
+  sendDmg({t:'dmg',id:e.id,dmg:Math.round(dmg),kb,dx,dz,big:big?1:0,k,el:F.elem?F.elem.type:0,du:lv('dual'),pm:+pmul().toFixed(2)});
 }
 function hitEnemy(e,dmg,kb,dx,dz,big,k){
   if(isCl()){cDmg(e,dmg,kb,dx,dz,big,k);lifeSteal(dmg,e);return;}
@@ -16404,9 +16412,10 @@ function makeBoss(){
   return g;
 }
 function spawnBoss(save){
-  if(!save)F.bossN++;const g=makeBoss(),hp=save?save.hp:320+(F.bossN-1)*200,a=AREAS[0];
+  if(!save)F.bossN++;const _t0=performance.now(),g=makeBoss(),hp=save?save.hp:320+(F.bossN-1)*200,a=AREAS[0];
   const B={g,hp,max:save?save.max:hp,x:clamp(pos.x+7,a.x0+3,a.x1-3),z:-0.8,face:PI,state:'drop',t:0,cd:1.4,vy:0,y:22,age:0,tel:null,ft:0,ice:null,two:false,hitDone:false,walk:0};
   addOutlines(g);g.position.set(B.x,B.y,B.z);g.traverse(o=>{if(o.isMesh&&!o.userData.ol)o.castShadow=true;});scene.add(g);F.boss=B;
+  if(NETDBG)window._bossBuild=Math.round(performance.now()-_t0);
   banner(save?'⚠ 魔王回來了 ⚠':'⚠ 魔王機器人 ⚠','ice');SND.bossWarn();SND.say('魔王機器人出現了！',{pitch:0.6,rate:0.8,gap:0});SND.setIntensity(6);
   hud();
 }
@@ -16420,7 +16429,7 @@ function bossTel(B,kind,r){
 const BSS=()=>F.boss||CO.boss||null;
 const isBoss=o=>!!o&&(o===F.boss||o===CO.boss);
 function hitBoss(dmg,big,dx,dz,k){
-  if(isCl()){const B2=CO.boss;if(B2){hitFx(B2.x-dx*1.2,2.6,B2.z-dz*1.2,big,Math.round(dmg));NET.send({t:'bdmg',dmg:Math.round(dmg),big:big?1:0,dx,dz,k,el:F.elem?F.elem.type:0,du:lv('dual'),pm:+pmul().toFixed(2)});if(k!==undefined)lifeSteal(dmg,B2);}return;}
+  if(isCl()){const B2=CO.boss;if(B2){hitFx(B2.x-dx*1.2,2.6,B2.z-dz*1.2,big,Math.round(dmg));sendDmg({t:'bdmg',dmg:Math.round(dmg),big:big?1:0,dx,dz,k,el:F.elem?F.elem.type:0,du:lv('dual'),pm:+pmul().toFixed(2)});if(k!==undefined)lifeSteal(dmg,B2);}return;}
   const B=F.boss;if(!B||B.state==='dead')return;
   if(B.state==='frozen')dmg*=1.4;
   B.hp-=dmg;hitFx(B.x-dx*1.2,2.6,B.z-dz*1.2,big,dmg,big?'#ffdf4a':'#ffffff');flashChar(B.g,80);if(k!==undefined)lifeSteal(dmg,B);if(k===1&&dualLv())B.burn={t:3,dps:3+2*dualLv(),acc:0};
@@ -16429,6 +16438,10 @@ function hitBoss(dmg,big,dx,dz,k){
   if(!B.two&&B.hp<B.max*0.5){B.two=true;banner('💢 魔王暴走！','ko');SND.bossWarn();SND.say('可惡的小鬼……',{pitch:0.55,rate:0.8,gap:0});for(let i=0;i<2;i++)spawnEnemy(Math.random()<0.5?'fast':'norm');}
 }
 function bossDie(){
+  const _p0=performance.now();
+  try{bossDie2();}finally{if(NETDBG){(window._prof||(window._prof={})).bossDie=Math.round(performance.now()-_p0);window._prof.at=performance.timeOrigin+_p0;}}
+}
+function bossDie2(){
   const B=F.boss;B.state='dead';B.t=0;hideBossTel(B);if(B.ice){scene.remove(B.ice);B.ice=null;}
   banner('🏆 魔王擊破！','fight');SND.say('魔王擊破！',{pitch:0.8,rate:0.9,gap:0});F.score+=2000;F.kills++;gainXP(8);if(isHo())NET.send({t:'xp',n:8,bko:1});F.slow=0.8;F.shake=1;
   {const kc=$h('killc');kc.classList.remove('pop');void kc.offsetWidth;kc.classList.add('pop');}
@@ -16793,6 +16806,10 @@ function gainXP(n){
 let lvRound=0,lvCdInt=null,lvWait=false,myLvN=0;
 function lvResume(){lvWait=false;F.pause=false;$h('lvl').classList.remove('show');if(lvCdInt){clearInterval(lvCdInt);lvCdInt=null;}}
 function showLevelUp(){
+  const _p0=performance.now();
+  try{showLevelUp2();}finally{if(NETDBG){(window._prof||(window._prof={})).lvlMenu=Math.round(performance.now()-_p0);}}
+}
+function showLevelUp2(){
   const pool=SK.filter(s=>lv(s.id)<5);
   if(!pool.length){F.lvlQ=0;return;}
   const picks=[];while(picks.length<3&&pool.length)picks.push(pool.splice((Math.random()*pool.length)|0,1)[0]);
@@ -17930,9 +17947,9 @@ function loop(now){
     const bp=!!(F.boss&&F.boss.state!=='dead')||!!CO.boss;
     if(bp!==bossPerf){
       bossPerf=bp;
-      sun.castShadow=!bp;
-      scene.traverse(o=>{if(o.userData&&o.userData.ol)o.visible=!bp;});
+      renderer.shadowMap.autoUpdate=!bp;renderer.shadowMap.needsUpdate=true;
     }
+    if(bossPerf&&(loopAll&1))renderer.shadowMap.needsUpdate=true;
   }
   if(NET.state()==='on'){
     const rn2=performance.now();
@@ -17974,7 +17991,8 @@ function loop(now){
   camera.fov=baseFov-F.zoomK*5;F.zoomK=Math.max(0,F.zoomK-dt*3.5);
   camera.setViewOffset(W,H,vo.x,vo.y,W,H);
   {const sp0=mode==='room'?pos:V(0,0,0);sun.target.position.set(sp0.x,0,sp0.z);sun.position.set(sp0.x+4,9,sp0.z+5);}
-  if(!document.hidden)renderer.render(scene,camera);
+  if(NETDBG){const r0=performance.now();if(!document.hidden)renderer.render(scene,camera);const rd=performance.now()-r0,P=window._prof||(window._prof={});if(rd>(P.render||0)){P.render=Math.round(rd);P.renderAt=Math.round(performance.timeOrigin+r0);P.progs=renderer.info.programs?renderer.info.programs.length:0;}P.upd=Math.max(P.upd||0,Math.round(r0-lastLoopT));}
+  else if(!document.hidden)renderer.render(scene,camera);
 }
 
 
@@ -18395,6 +18413,12 @@ function netData(d,pid){
   }
 }
 function netData2(d,sp,R0){
+  if((d.t==='dmg'||d.t==='bdmg')&&d.sq&&R0!==RPNONE){
+    const S=R0.dseen||(R0.dseen=[]);
+    if(S.indexOf(d.sq)>=0)return;
+    S.push(d.sq);if(S.length>120)S.shift();
+    if(NETDBG)window._dmgGot=(window._dmgGot||0)+1;
+  }
   if(d.t==='hi'){
     const fresh=!RP.on;
     rpEnsure();RP._nb=null;RP.lastTs=undefined;RP.off=null;RP.on=true;RP.name=(''+(d.name||'夥伴')).slice(0,12);RP.cfg=d.cfg;RP.sk=d.sk||{};RP.lvpN=0;setTimeout(()=>drawAva(R0),800);
@@ -19115,7 +19139,21 @@ if(/netdbg/.test(HASH)){
   window._star=(x,z)=>{if(!starObj)spawnStar(x,z);return !!starObj;};
   window._shots=()=>shots.map(q=>({x:+q.x.toFixed(1),z:+q.z.toFixed(1),h:!!q.hostile}));
 }
+if(/netdbg/.test(HASH))window._progs=()=>renderer.info.programs.map(q=>q.name+'#'+q.id+':'+(q.cacheKey.match(/[^,]*(sprite|basic|toon|shadow|depth|distance)[^,]*/i)||[''])[0].slice(0,24)+'/'+q.cacheKey.length);
 if(/netdbg/.test(HASH))window._tp=(i)=>{pos.set(RCENT[i][0],0,RCENT[i][1]);target=null;wps=[];return curRoom;};
+setTimeout(()=>{
+  try{
+    const g=new THREE.Group();g.position.set(0,-200,0);
+    const bm=o=>new THREE.MeshBasicMaterial(o),geo=new THREE.PlaneGeometry(0.01,0.01);
+    [bm({color:0xffffff}),bm({color:0xffffff,transparent:true,side:2}),bm({map:glowTex,transparent:true}),bm({map:glowTex,transparent:true,side:2}),
+     bm({map:tornTex,transparent:true,side:2,blending:THREE.AdditiveBlending}),bm({map:mcTex,transparent:true}),bm({color:0xffffff,vertexColors:false,transparent:true,depthTest:false}),
+     LAMB({color:0xffffff,transparent:true,opacity:0.5}),LAMB({color:0xffffff,emissive:0x222222}),LAMB({color:0xffffff,side:2}),LAMB({color:0xffffff,side:2,transparent:true,opacity:0.5})
+    ].forEach(m=>g.add(new THREE.Mesh(geo,m)));
+    g.add(addGlowSprite(0xffffff));
+    const bg=makeBoss();scene.remove(bg);addOutlines(bg);bg.traverse(o=>{if(o.isMesh)o.castShadow=true;});g.add(bg);
+    scene.add(g);renderer.compile(scene,camera);scene.remove(g);
+  }catch(e){}
+},2500);
 requestAnimationFrame(t0=>{last=t0;loop(t0);});
 })();
 </script>

@@ -6,6 +6,7 @@ const NET=(function(){
   let peer=null,conn=null,fast=null,micStream=null;
   let state='off',code='',isHost=false,muted=false,micOk=false,myId=0,manual=false;
   const MAXC=3;
+  const RELSTALL=+(((/[#&]relstall=(\d+)/.exec(location.hash)||[])[1])||0);
   const links=new Map();let nextPid=1;
   const calls=[],audios=[];
   const L={onState:null,onData:null,onPeer:null,info:null};
@@ -344,6 +345,7 @@ const NET=(function(){
   function send(o,quick){
     if(isHost){for(const lk of links.values())put(lk,o,quick);return;}
     if(quick&&fast&&fast.open){try{fast.send(o);return;}catch(e){}}
+    if(RELSTALL){const c0=conn;setTimeout(()=>{if(c0&&c0.open)try{c0.send(o);}catch(e){}},RELSTALL);return;}   // 測試用：模擬可靠通道被卡住
     if(conn&&conn.open)try{conn.send(o);}catch(e){}
   }
   function sendTo(pid,o,quick){const lk=links.get(pid);if(lk)put(lk,o,quick);}
